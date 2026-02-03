@@ -393,12 +393,22 @@ export const syncHistory = async (config: EvolutionConfig) => {
 
     const data = await response.json()
     console.log('Evolution Sync Response:', data)
-    // Data can be { messages: [...] } or just [...]
-    const messages = Array.isArray(data)
-      ? data
-      : data.messages || data.data || []
 
-    if (!messages.length) return { count: 0 }
+    // In Evolution v2, messages are in data.messages.records
+    let messages: any[] = []
+    if (Array.isArray(data)) {
+      messages = data
+    } else if (data.messages?.records && Array.isArray(data.messages.records)) {
+      messages = data.messages.records
+    } else if (Array.isArray(data.messages)) {
+      messages = data.messages
+    } else if (Array.isArray(data.data)) {
+      messages = data.data
+    }
+
+    console.log('Total messages found for sync:', messages.length)
+
+    if (messages.length === 0) return { count: 0 }
 
     let syncedCount = 0
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
