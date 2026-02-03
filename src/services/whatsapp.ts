@@ -310,12 +310,12 @@ export const configureWebhook = async (config: EvolutionConfig) => {
 
   try {
     const payload = {
-      url: webhookUrl, // Standard v2
-      webhookUrl: webhookUrl, // Compatibility fallback
-      enabled: true,
-      webhookByEvents: false, // Legacy
-      byEvents: false, // v2
-      events: ['MESSAGES_UPSERT'],
+      webhook: {
+        enabled: true,
+        url: webhookUrl,
+        byEvents: false,
+        events: ['MESSAGES_UPSERT'],
+      }
     }
 
     const response = await fetch(
