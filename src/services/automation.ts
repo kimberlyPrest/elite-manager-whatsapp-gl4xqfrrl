@@ -24,12 +24,12 @@ export interface AutomationModel {
 export interface AutomationCampaign {
   id: string
   status_automacao:
-    | 'ativa'
-    | 'pausada'
-    | 'concluida'
-    | 'cancelada'
-    | 'rascunho'
-    | 'aguardando'
+  | 'ativa'
+  | 'pausada'
+  | 'concluida'
+  | 'cancelada'
+  | 'rascunho'
+  | 'aguardando'
   data_inicio: string | null
   total_envios_planejados: number
   total_envios_concluidos: number
@@ -274,6 +274,8 @@ export const createCampaign = async (campaign: any, recipients: any[]) => {
   const { data: automacao, error: campError } = await supabase
     .from('automacoes_massa')
     .insert({
+      nome: campaign.nome,
+      objetivo: campaign.objetivo,
       tipo_selecao: campaign.tipo_selecao,
       status_automacao: 'aguardando',
       intervalo_min_segundos: campaign.configuracao_envio.min_interval,
@@ -297,16 +299,19 @@ export const createCampaign = async (campaign: any, recipients: any[]) => {
   if (campError) throw campError
 
   // 2. Create Recipients
-  const recipientsPayload = recipients.map((r) => ({
-    automacao_id: automacao.id,
-    cliente_id: r.id,
-    numero_whatsapp: r.telefone || r.numero_whatsapp,
-    nome_destinatario: r.nome_completo || r.nome_destinatario,
-    mensagem_personalizada: r.message,
-    status_envio: 'aguardando',
-    tempo_espera_segundos: 0,
-    variacao_index: r.variationIndex || 0,
-  }))
+  const recipientsPayload = recipients.map((r) => {
+    const isTemp = r.id && r.id.toString().startsWith('temp-');
+    return {
+      automacao_id: automacao.id,
+      cliente_id: isTemp ? null : r.id,
+      numero_whatsapp: r.telefone || r.numero_whatsapp,
+      nome_destinatario: r.nome_completo || r.nome_destinatario,
+      mensagem_personalizada: r.message,
+      status_envio: 'aguardando',
+      tempo_espera_segundos: 0,
+      variacao_index: r.variationIndex || 0,
+    }
+  })
 
   // Insert in batches of 100
   for (let i = 0; i < recipientsPayload.length; i += 100) {

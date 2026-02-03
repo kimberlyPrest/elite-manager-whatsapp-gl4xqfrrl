@@ -64,6 +64,31 @@ Deno.serve(async (req: Request) => {
 
     // Process each automation
     for (const automation of automations) {
+      // 2.1 Check Business Hours
+      const configEnvio = automation.configuracao_envio || {}
+      if (configEnvio.business_hours_enabled) {
+        const now = new Date();
+        // Adjust to Brazil time roughly or use UTC if config expects UTC. 
+        // Assuming simpel HH:mm comparison for now.
+        // Getting current hours in UTC-3 (Brazil) for safety or use formatting
+        const brazilTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+        const currentHour = brazilTime.getHours();
+        const currentMinute = brazilTime.getMinutes();
+        const currentTimeVal = currentHour * 60 + currentMinute;
+
+        const [startH, startM] = (configEnvio.start_time || '09:00').split(':').map(Number);
+        const [endH, endM] = (configEnvio.end_time || '18:00').split(':').map(Number);
+        const startTimeVal = startH * 60 + startM;
+        const endTimeVal = endH * 60 + endM;
+
+        if (currentTimeVal < startTimeVal || currentTimeVal > endTimeVal) {
+          console.log(`Automation ${automation.id} paused due to business hours.`);
+          // Schedule for next start time (tomorrow or today later if before start)
+          // Simple approach: set to next check in 1 hour
+          // ideally we calculate exact next start date
+          continue;
+        }
+      }
       // 3. Get ONE pending recipient
       // Using maybeSingle() to handle case where no recipients are left without throwing
       const { data: recipient, error: recipientError } = await supabase
@@ -231,16 +256,24 @@ Deno.serve(async (req: Request) => {
       // 7. Update Automation Counters & Next Schedule
       const min = automation.intervalo_min_segundos || 30
       const max = automation.intervalo_max_segundos || 300
-      const randomDelayMs =
-        Math.floor(Math.random() * (max - min + 1) + min) * 1000
-      const nextTime = new Date(Date.now() + randomDelayMs).toISOString()
+      let delaySeconds = Math.floor(Math.random() * (max - min + 1) + min)
+
+      // Batch Pause Logic
+      const completedNow = (success ? automation.total_envios_concluidos + 1 : automation.total_envios_concluidos);
+      const batchSize = automation.configuracao_envio?.pause_after || 0;
+      const pauseDuration = automation.configuracao_envio?.pause_duration || 0;
+
+      if (batchSize > 0 && pauseDuration > 0 && completedNow > 0 && completedNow % batchSize === 0) {
+        console.log(`Batch pause trigger for automation ${automation.id}. Pausing for ${pauseDuration} minutes.`);
+        delaySeconds += (pauseDuration * 60);
+      }
+
+      const nextTime = new Date(Date.now() + (delaySeconds * 1000)).toISOString()
 
       await supabase
         .from('automacoes_massa')
         .update({
-          total_envios_concluidos: success
-            ? automation.total_envios_concluidos + 1
-            : automation.total_envios_concluidos,
+          total_envios_concluidos: completedNow,
           total_envios_falhados: success
             ? automation.total_envios_falhados
             : automation.total_envios_falhados + 1,

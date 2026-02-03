@@ -10,6 +10,7 @@ import {
   getCampaigns,
   AutomationCampaign,
   AutomationModel,
+  triggerQueueProcessing,
 } from '@/services/automation'
 import { toast } from '@/hooks/use-toast'
 
@@ -23,12 +24,34 @@ export default function Automation() {
   )
 
   useEffect(() => {
-    getCampaigns()
-      .then(setCampaigns)
-      .catch(() =>
-        toast({ title: 'Erro ao carregar campanhas', variant: 'destructive' }),
-      )
+    const fetchCampaigns = () => {
+      getCampaigns()
+        .then(setCampaigns)
+        .catch(() =>
+          console.error('Erro ao carregar campanhas no background')
+        )
+    }
+
+    fetchCampaigns()
+
+    // Polling for UI updates (every 5s)
+    const intervalId = setInterval(fetchCampaigns, 5000)
+
+    return () => clearInterval(intervalId)
   }, [refreshTrigger])
+
+  // "Poor Man's Cron" - Trigger Queue Processing while Admin is online (every 15s)
+  useEffect(() => {
+    const queueInterval = setInterval(async () => {
+      const hasActive = campaigns.some(c => c.status_automacao === 'ativa')
+      if (hasActive) {
+        console.log('Triggering automation queue...')
+        await triggerQueueProcessing()
+      }
+    }, 15000)
+
+    return () => clearInterval(queueInterval)
+  }, [campaigns])
 
   const handleRefresh = () => {
     setRefreshTrigger((prev) => prev + 1)

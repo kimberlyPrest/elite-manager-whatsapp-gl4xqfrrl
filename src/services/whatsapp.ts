@@ -318,7 +318,7 @@ export const configureWebhook = async (config: EvolutionConfig) => {
           apikey: config.apikey,
         },
         body: JSON.stringify({
-          webhookUrl,
+          url: webhookUrl,
           webhookByEvents: false,
           events: ['MESSAGES_UPSERT'],
           enabled: true,

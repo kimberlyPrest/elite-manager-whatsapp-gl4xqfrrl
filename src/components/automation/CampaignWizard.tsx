@@ -20,6 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { getClients, Client } from '@/services/clients'
 import { filterClients, AutomationModel } from '@/services/automation'
@@ -57,7 +63,12 @@ export function CampaignWizard({
     status: [] as string[],
     tags: [] as string[],
     engagement: [] as string[],
+    status: [] as string[],
+    tags: [] as string[],
+    engagement: [] as string[],
     manualList: '',
+    selectionMethod: 'filters' as 'filters' | 'manual',
+    manualRecipients: [] as { name?: string; phone: string }[],
   })
 
   // Step 3: Messaging
@@ -70,6 +81,10 @@ export function CampaignWizard({
     businessHours: true,
     startTime: '09:00',
     endTime: '18:00',
+    batchSize: 50,
+    batchPauseMinutes: 10,
+    enableBatchPause: false,
+    daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
   })
 
   const [showReview, setShowReview] = useState(false)
@@ -114,8 +129,40 @@ export function CampaignWizard({
   }, [open])
 
   useEffect(() => {
-    const filtered = filterClients(allClients, filters)
-    setFilteredClients(filtered)
+    if (filters.selectionMethod === 'filters') {
+      const filtered = filterClients(allClients, filters)
+      setFilteredClients(filtered)
+    } else {
+      // Parse manual list
+      const lines = filters.manualList.split('\n').filter((l) => l.trim())
+      const manualClients: Client[] = lines.map((line) => {
+        // Simple CSV parse: phone,name or just phone
+        const parts = line.split(',')
+        const phone = parts[0].trim().replace(/\D/g, '')
+        const name = parts[1]?.trim() || 'Desconhecido'
+
+        // Check if client exists
+        const existing = allClients.find(c =>
+          c.telefone.replace(/\D/g, '') === phone ||
+          c.whatsapp_number?.replace(/\D/g, '') === phone
+        )
+
+        if (existing) return existing
+
+        // Mock client structure for new contacts
+        return {
+          id: `temp-${Math.random()}`,
+          nome_completo: name,
+          telefone: phone,
+          whatsapp_number: phone,
+          primeiro_nome: name.split(' ')[0],
+          email: '',
+          pendente_classificacao: true,
+          created_at: new Date().toISOString(),
+        } as unknown as Client
+      })
+      setFilteredClients(manualClients)
+    }
   }, [filters, allClients])
 
   const handleNext = () => {
@@ -207,62 +254,90 @@ export function CampaignWizard({
 
             {step === 2 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                <div className="flex gap-4">
-                  <div className="flex-1 space-y-4">
-                    <Label>Produtos</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {['Elite', 'Scale', 'Labs', 'Venda'].map((p) => (
-                        <div
-                          key={p}
-                          className="flex items-center space-x-2 border border-[#333] p-2 rounded bg-[#1a1a1a]"
-                        >
-                          <Checkbox
-                            id={`prod-${p}`}
-                            checked={filters.products.includes(p)}
-                            onCheckedChange={(checked) => {
-                              if (checked)
-                                setFilters({
-                                  ...filters,
-                                  products: [...filters.products, p],
-                                })
-                              else
-                                setFilters({
-                                  ...filters,
-                                  products: filters.products.filter(
-                                    (i) => i !== p,
-                                  ),
-                                })
-                            }}
-                          />
-                          <label
-                            htmlFor={`prod-${p}`}
-                            className="text-sm cursor-pointer"
-                          >
-                            {p}
-                          </label>
+                <Tabs
+                  value={filters.selectionMethod}
+                  onValueChange={(v) => setFilters({ ...filters, selectionMethod: v as any })}
+                  className="w-full"
+                >
+                  <TabsList className="bg-[#1a1a1a] border-[#333] w-full">
+                    <TabsTrigger value="filters" className="flex-1">Por Filtros (Recomendado)</TabsTrigger>
+                    <TabsTrigger value="manual" className="flex-1">Lista Manual / CSV</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="filters" className="space-y-6 mt-4">
+                    <div className="flex gap-4">
+                      <div className="flex-1 space-y-4">
+                        <Label>Produtos</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {['Elite', 'Scale', 'Labs', 'Venda'].map((p) => (
+                            <div
+                              key={p}
+                              className="flex items-center space-x-2 border border-[#333] p-2 rounded bg-[#1a1a1a]"
+                            >
+                              <Checkbox
+                                id={`prod-${p}`}
+                                checked={filters.products.includes(p)}
+                                onCheckedChange={(checked) => {
+                                  if (checked)
+                                    setFilters({
+                                      ...filters,
+                                      products: [...filters.products, p],
+                                    })
+                                  else
+                                    setFilters({
+                                      ...filters,
+                                      products: filters.products.filter(
+                                        (i) => i !== p,
+                                      ),
+                                    })
+                                }}
+                              />
+                              <label
+                                htmlFor={`prod-${p}`}
+                                className="text-sm cursor-pointer"
+                              >
+                                {p}
+                              </label>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
+                      <div className="flex-1 space-y-4">
+                        <Label>Nível de Engajamento</Label>
+                        <Select
+                          value={filters.engagement?.[0]}
+                          onValueChange={(val) =>
+                            setFilters({ ...filters, engagement: [val] })
+                          }
+                        >
+                          <SelectTrigger className="bg-[#1a1a1a] border-[#333]">
+                            <SelectValue placeholder="Selecione..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Alto">Alto</SelectItem>
+                            <SelectItem value="Médio">Médio</SelectItem>
+                            <SelectItem value="Baixo">Baixo</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex-1 space-y-4">
-                    <Label>Nível de Engajamento</Label>
-                    <Select
-                      value={filters.engagement?.[0]}
-                      onValueChange={(val) =>
-                        setFilters({ ...filters, engagement: [val] })
-                      }
-                    >
-                      <SelectTrigger className="bg-[#1a1a1a] border-[#333]">
-                        <SelectValue placeholder="Selecione..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Alto">Alto</SelectItem>
-                        <SelectItem value="Médio">Médio</SelectItem>
-                        <SelectItem value="Baixo">Baixo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                  </TabsContent>
+
+                  <TabsContent value="manual" className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label>Cole os números (um por linha)</Label>
+                      <Textarea
+                        placeholder="5511999998888,Nome do Cliente&#10;5511988887777,Outro Cliente"
+                        className="h-[200px] bg-[#1a1a1a] border-[#333] font-mono text-sm"
+                        value={filters.manualList}
+                        onChange={(e) => setFilters({ ...filters, manualList: e.target.value })}
+                      />
+                      <p className="text-xs text-gray-500">
+                        Formato: <code>telefone,nome</code> (nome opcional). Aceita CSV simples.
+                      </p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
 
                 <div className="bg-[#1a1a1a] p-4 rounded-lg border border-[#333] flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -271,10 +346,10 @@ export function CampaignWizard({
                     </div>
                     <div>
                       <p className="font-semibold text-white">
-                        {filteredClients.length} clientes encontrados
+                        {filteredClients.length} destinatários encontrados
                       </p>
                       <p className="text-xs text-gray-400">
-                        Baseado nos filtros aplicados
+                        {filters.selectionMethod === 'filters' ? 'Baseado nos filtros aplicados' : 'Baseado na lista manual'}
                       </p>
                     </div>
                   </div>
@@ -345,19 +420,84 @@ export function CampaignWizard({
                   />
                 </div>
 
-                <div className="flex items-center justify-between bg-[#1a1a1a] p-4 rounded-lg border border-[#333]">
-                  <div className="space-y-1">
-                    <Label>Respeitar Horário Comercial</Label>
-                    <p className="text-xs text-gray-400">
-                      Pausar envios fora de 09:00 - 18:00
-                    </p>
+                <div className="bg-[#1a1a1a] p-4 rounded-lg border border-[#333] space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label>Respeitar Horário Comercial</Label>
+                      <p className="text-xs text-gray-400">
+                        Pausar envios fora do horário definido
+                      </p>
+                    </div>
+                    <Switch
+                      checked={timing.businessHours}
+                      onCheckedChange={(c) =>
+                        setTiming({ ...timing, businessHours: c })
+                      }
+                    />
                   </div>
-                  <Switch
-                    checked={timing.businessHours}
-                    onCheckedChange={(c) =>
-                      setTiming({ ...timing, businessHours: c })
-                    }
-                  />
+
+                  {timing.businessHours && (
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Início</Label>
+                        <Input
+                          type="time"
+                          value={timing.startTime}
+                          onChange={(e) => setTiming({ ...timing, startTime: e.target.value })}
+                          className="bg-[#111] border-[#333]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Fim</Label>
+                        <Input
+                          type="time"
+                          value={timing.endTime}
+                          onChange={(e) => setTiming({ ...timing, endTime: e.target.value })}
+                          className="bg-[#111] border-[#333]"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-[#1a1a1a] p-4 rounded-lg border border-[#333] space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label>Pausar entre Lotes</Label>
+                      <p className="text-xs text-gray-400">
+                        Faz uma pausa maior a cada X mensagens
+                      </p>
+                    </div>
+                    <Switch
+                      checked={timing.enableBatchPause}
+                      onCheckedChange={(c) =>
+                        setTiming({ ...timing, enableBatchPause: c })
+                      }
+                    />
+                  </div>
+
+                  {timing.enableBatchPause && (
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Mensagens por lote</Label>
+                        <Input
+                          type="number"
+                          value={timing.batchSize}
+                          onChange={(e) => setTiming({ ...timing, batchSize: parseInt(e.target.value) })}
+                          className="bg-[#111] border-[#333]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Pausa (minutos)</Label>
+                        <Input
+                          type="number"
+                          value={timing.batchPauseMinutes}
+                          onChange={(e) => setTiming({ ...timing, batchPauseMinutes: parseInt(e.target.value) })}
+                          className="bg-[#111] border-[#333]"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
