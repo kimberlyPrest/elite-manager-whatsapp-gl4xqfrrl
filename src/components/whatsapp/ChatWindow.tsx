@@ -6,14 +6,21 @@ import {
   sendWhatsAppMessage,
   markAsRead,
 } from '@/services/whatsapp'
+import {
+  generateResponseSuggestion,
+  trackSuggestionUsage,
+  SuggestionResponse,
+} from '@/services/ai'
 import { ChatInput } from './ChatInput'
 import { MessageBubble } from './MessageBubble'
+import { SuggestionModal } from './SuggestionModal'
 import { Button } from '@/components/ui/button'
 import { User, MoreVertical, Phone, Loader2 } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { supabase } from '@/lib/supabase/client'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { toast } from '@/hooks/use-toast'
 
 interface ChatWindowProps {
   conversation: WhatsAppConversation
@@ -23,7 +30,14 @@ interface ChatWindowProps {
 export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
   const [messages, setMessages] = useState<WhatsAppMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const [inputText, setInputText] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // AI Suggestion State
+  const [suggestionModalOpen, setSuggestionModalOpen] = useState(false)
+  const [suggestionLoading, setSuggestionLoading] = useState(false)
+  const [suggestionData, setSuggestionData] =
+    useState<SuggestionResponse | null>(null)
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -90,8 +104,60 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
       conversation.numero_whatsapp,
       text,
     )
-    // Message is added via subscription or optimistic update in service if needed
-    // But service returns the message, we can append it here if subscription is slow
+  }
+
+  const handleSuggest = async () => {
+    if (messages.length === 0) {
+      toast({
+        title: 'Histórico insuficiente',
+        description:
+          'É necessário haver mensagens trocadas para gerar contexto.',
+        variant: 'secondary',
+      })
+      return
+    }
+
+    setSuggestionLoading(true)
+    setSuggestionModalOpen(true) // Open immediately to show loading state
+    setSuggestionData(null)
+
+    try {
+      const data = await generateResponseSuggestion(conversation.id)
+      setSuggestionData(data)
+    } catch (error: any) {
+      setSuggestionModalOpen(false)
+      if (error.message.includes('API Key not configured')) {
+        toast({
+          title: 'Configuração Necessária',
+          description: 'A chave da API Gemini não está configurada.',
+          variant: 'destructive',
+          action: (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (window.location.href = '/settings')}
+            >
+              Configurar
+            </Button>
+          ),
+        })
+      } else {
+        toast({
+          title: 'Erro na IA',
+          description: error.message,
+          variant: 'destructive',
+        })
+      }
+    } finally {
+      setSuggestionLoading(false)
+    }
+  }
+
+  const handleUseSuggestion = (text: string, wasEdited: boolean) => {
+    setInputText(text)
+    if (suggestionData?.analyticsId) {
+      trackSuggestionUsage(suggestionData.analyticsId, true, wasEdited)
+    }
   }
 
   return (
@@ -183,7 +249,23 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
       </ScrollArea>
 
       {/* Input */}
-      <ChatInput onSend={handleSend} disabled={loading} />
+      <ChatInput
+        onSend={handleSend}
+        disabled={loading}
+        onSuggest={handleSuggest}
+        suggestionLoading={suggestionLoading}
+        inputText={inputText}
+        setInputText={setInputText}
+      />
+
+      <SuggestionModal
+        isOpen={suggestionModalOpen}
+        onClose={() => setSuggestionModalOpen(false)}
+        loading={suggestionLoading}
+        data={suggestionData}
+        onUse={handleUseSuggestion}
+        onRegenerate={handleSuggest}
+      />
     </div>
   )
 }

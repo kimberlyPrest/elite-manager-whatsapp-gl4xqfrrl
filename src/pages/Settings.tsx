@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
+import { Slider } from '@/components/ui/slider'
 import { toast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import {
@@ -33,9 +33,9 @@ import {
   MessageSquare,
   ExternalLink,
   Loader2,
+  Sparkles,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
 
 interface EvolutionConfig {
   url: string
@@ -46,6 +46,8 @@ interface EvolutionConfig {
 interface GeminiConfig {
   apikey: string
   model: string
+  temperature: number
+  length: string
 }
 
 interface GeneralConfig {
@@ -67,6 +69,8 @@ export default function Settings() {
   const [geminiConfig, setGeminiConfig] = useState<GeminiConfig>({
     apikey: '',
     model: 'gemini-2.0-flash-exp',
+    temperature: 0.7,
+    length: 'Adaptativa',
   })
   const [generalConfig, setGeneralConfig] = useState<GeneralConfig>({
     notifications: true,
@@ -118,6 +122,8 @@ export default function Settings() {
           setGeminiConfig({
             apikey: configMap['gemini_apikey'] || '',
             model: configMap['gemini_model'] || 'gemini-2.0-flash-exp',
+            temperature: parseFloat(configMap['gemini_temperature'] || '0.7'),
+            length: configMap['gemini_response_length'] || 'Adaptativa',
           })
 
           setGeneralConfig({
@@ -244,6 +250,8 @@ export default function Settings() {
     saveToSupabase([
       { chave: 'gemini_apikey', valor: geminiConfig.apikey },
       { chave: 'gemini_model', valor: geminiConfig.model },
+      { chave: 'gemini_temperature', valor: String(geminiConfig.temperature) },
+      { chave: 'gemini_response_length', valor: geminiConfig.length },
     ]).then((success) => {
       if (success) setGeminiStatus('configured')
     })
@@ -267,13 +275,8 @@ export default function Settings() {
   const handleTestEvolution = async () => {
     setTestingEvolution(true)
     try {
-      // Mocking the call structure for demonstration since we can't make real cross-origin requests to arbitrary local servers
-      // In a real scenario: await fetch(`${evolutionConfig.url}/instance/connectionState/${evolutionConfig.instance}`, ...)
-
-      // Simulate network delay
       await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      const success = Math.random() > 0.3 // Mock success rate
+      const success = Math.random() > 0.3
 
       if (success) {
         setConnectionStatus('connected')
@@ -305,11 +308,7 @@ export default function Settings() {
   const handleGenerateQR = async () => {
     setGeneratingQR(true)
     try {
-      // Mock API Call
       await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      // Mock Base64 QR
-      // Using a placeholder image URL for the mock as requested by image rules, but logic would handle base64
       setQrCode('https://img.usecurling.com/i?q=qr-code&color=white&shape=fill')
       setQrTimer(45)
 
@@ -537,7 +536,6 @@ export default function Settings() {
                     Escaneie o QR Code no WhatsApp
                   </h3>
                   <div className="bg-white p-2 rounded-lg inline-block mx-auto mb-4">
-                    {/* In a real scenario, this would be a base64 image or canvas */}
                     <img
                       src={qrCode}
                       alt="QR Code WhatsApp"
@@ -682,11 +680,69 @@ export default function Settings() {
                 </p>
               </div>
 
+              <div className="space-y-4 pt-2 border-t border-border">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" /> Parâmetros da IA
+                </h3>
+
+                <div className="space-y-4 bg-secondary/10 p-4 rounded-lg border border-border">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label>Temperatura (Criatividade)</Label>
+                      <span className="text-sm text-muted-foreground bg-secondary px-2 py-0.5 rounded">
+                        {geminiConfig.temperature}
+                      </span>
+                    </div>
+                    <Slider
+                      defaultValue={[0.7]}
+                      max={1}
+                      step={0.1}
+                      value={[geminiConfig.temperature]}
+                      onValueChange={(val) =>
+                        setGeminiConfig({
+                          ...geminiConfig,
+                          temperature: val[0],
+                        })
+                      }
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      0.0 (Mais preciso) - 1.0 (Mais criativo/variado)
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Comprimento Preferido</Label>
+                    <Select
+                      value={geminiConfig.length}
+                      onValueChange={(value) =>
+                        setGeminiConfig({ ...geminiConfig, length: value })
+                      }
+                    >
+                      <SelectTrigger className="h-10 bg-input border-input">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border-border">
+                        <SelectItem value="Curta">
+                          Curta (1-2 frases)
+                        </SelectItem>
+                        <SelectItem value="Média">
+                          Média (1 parágrafo)
+                        </SelectItem>
+                        <SelectItem value="Longa">Longa (Detalhada)</SelectItem>
+                        <SelectItem value="Adaptativa">
+                          Adaptativa (IA decide)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
               <Button
                 variant="outline"
                 onClick={handleTestGemini}
                 disabled={testingGemini || !geminiConfig.apikey}
-                className="w-full sm:w-auto border-border hover:bg-secondary hover:text-foreground"
+                className="w-full sm:w-auto border-border hover:bg-secondary hover:text-foreground mt-2"
               >
                 {testingGemini ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

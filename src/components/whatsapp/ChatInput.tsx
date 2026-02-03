@@ -1,17 +1,32 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Paperclip, Send, Wand2, Loader2 } from 'lucide-react'
+import { Paperclip, Send, Sparkles, Loader2 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
 interface ChatInputProps {
   onSend: (text: string) => Promise<void>
+  onSuggest?: () => void
   disabled?: boolean
+  suggestionLoading?: boolean
+  inputText?: string
+  setInputText?: (text: string) => void
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
-  const [message, setMessage] = useState('')
+export function ChatInput({
+  onSend,
+  onSuggest,
+  disabled,
+  suggestionLoading,
+  inputText,
+  setInputText,
+}: ChatInputProps) {
+  // Use internal state if props are not provided (backward compatibility)
+  const [internalMessage, setInternalMessage] = useState('')
+  const message = inputText !== undefined ? inputText : internalMessage
+  const setMessage = setInputText || setInternalMessage
+
   const [sending, setSending] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -41,6 +56,11 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       e.preventDefault()
       handleSend()
     }
+    // Alt+S for Suggestion
+    if (e.altKey && e.key.toLowerCase() === 's' && onSuggest) {
+      e.preventDefault()
+      onSuggest()
+    }
   }
 
   const adjustHeight = () => {
@@ -53,6 +73,14 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   useEffect(() => {
     adjustHeight()
   }, [message])
+
+  // Focus textarea when text changes externally (e.g. suggestion used)
+  useEffect(() => {
+    if (message && !disabled) {
+      adjustHeight()
+      textareaRef.current?.focus()
+    }
+  }, [message, disabled])
 
   return (
     <div className="p-3 bg-[#111111] border-t border-[#2a2a2a] flex items-end gap-2">
@@ -71,25 +99,44 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Digite uma mensagem..."
+          placeholder="Digite uma mensagem... (Alt+S para IA)"
           className="min-h-[24px] max-h-[150px] p-0 border-0 bg-transparent resize-none focus-visible:ring-0 text-white placeholder:text-gray-500 leading-6"
           disabled={disabled}
         />
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-6 w-6 text-[#FFD700] hover:text-[#FFD700]/80 hover:bg-transparent"
-          title="Sugerir resposta com IA"
-        >
-          <Wand2 className="h-4 w-4" />
-        </Button>
       </div>
+
+      {onSuggest && (
+        <Button
+          onClick={onSuggest}
+          disabled={disabled || suggestionLoading}
+          variant="secondary"
+          className={cn(
+            'mb-0.5 h-10 px-3 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 text-indigo-300 hover:text-white hover:border-indigo-400 transition-all',
+            suggestionLoading && 'opacity-80',
+          )}
+          title="Sugerir resposta (Alt+S)"
+        >
+          {suggestionLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <span className="hidden md:inline text-xs">Gerando...</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline text-xs font-medium">
+                Sugerir
+              </span>
+            </>
+          )}
+        </Button>
+      )}
 
       <Button
         onClick={handleSend}
         disabled={!message.trim() || sending || disabled}
         className={cn(
-          'rounded-full h-10 w-10 p-0 mb-0.5 transition-all',
+          'rounded-full h-10 w-10 p-0 mb-0.5 transition-all shadow-lg',
           message.trim()
             ? 'bg-[#FFD700] text-black hover:bg-[#FFD700]/90'
             : 'bg-[#2a2a2a] text-gray-500',
