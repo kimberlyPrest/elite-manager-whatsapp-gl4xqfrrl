@@ -309,6 +309,15 @@ export const configureWebhook = async (config: EvolutionConfig) => {
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-whatsapp`
 
   try {
+    const payload = {
+      url: webhookUrl, // Standard v2
+      webhookUrl: webhookUrl, // Compatibility fallback
+      enabled: true,
+      webhookByEvents: false, // Legacy
+      byEvents: false, // v2
+      events: ['MESSAGES_UPSERT'],
+    }
+
     const response = await fetch(
       `${url}/webhook/set/${encodeURIComponent(config.instance)}`,
       {
@@ -317,23 +326,24 @@ export const configureWebhook = async (config: EvolutionConfig) => {
           'Content-Type': 'application/json',
           apikey: config.apikey,
         },
-        body: JSON.stringify({
-          url: webhookUrl,
-          webhookByEvents: false,
-          events: ['MESSAGES_UPSERT'],
-          enabled: true,
-        }),
+        body: JSON.stringify(payload),
       },
     )
 
     if (!response.ok) {
-      throw new Error(`Falha ao configurar webhook: ${response.status}`)
+      const errorText = await response.text()
+      try {
+        const errorJson = JSON.parse(errorText)
+        throw new Error(`Erro API: ${errorJson.response?.message || errorJson.message || JSON.stringify(errorJson)}`)
+      } catch (e) {
+        throw new Error(`Falha ao configurar webhook: ${response.status} - ${errorText}`)
+      }
     }
 
     return await response.json()
   } catch (error: any) {
     console.error('Webhook config failed:', error)
-    throw new Error(error.message || 'Erro ao configurar webhook')
+    throw error // Re-throw modified error
   }
 }
 
