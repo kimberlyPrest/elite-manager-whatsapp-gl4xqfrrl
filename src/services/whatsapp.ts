@@ -381,9 +381,13 @@ export const syncHistory = async (config: EvolutionConfig) => {
       const errorText = await response.text()
       try {
         const errorJson = JSON.parse(errorText)
-        throw new Error(`Erro API: ${errorJson.response?.message || errorJson.message || JSON.stringify(errorJson)}`)
+        throw new Error(
+          `Erro API: ${errorJson.response?.message || errorJson.message || JSON.stringify(errorJson)}`,
+        )
       } catch (e) {
-        throw new Error(`Falha ao buscar mensagens: ${response.status} - ${errorText}`)
+        throw new Error(
+          `Falha ao buscar mensagens: ${response.status} - ${errorText}`,
+        )
       }
     }
 
