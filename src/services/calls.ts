@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase/client'
 import { sendWhatsAppMessage } from './whatsapp'
-import { addDays, format } from 'date-fns'
+import { createTimelineEvent } from './timeline'
+import { format } from 'date-fns'
 
 export interface Call {
   id: string
@@ -75,6 +76,14 @@ const updateTag = async (
         ativo: true,
         created_at: new Date().toISOString(),
       })
+
+      // Create Timeline Event for new tag
+      await createTimelineEvent(
+        clientId,
+        'tag',
+        `Tag crítica adicionada: ${tag}`,
+        productId,
+      )
     } else {
       await supabase
         .from('tags_cliente')
@@ -146,6 +155,18 @@ export const scheduleCall = async (
     .update(updateObj)
     .eq('id', produto_cliente_id)
 
+  // Timeline Event
+  if (data_agendada) {
+    const formattedDate = format(new Date(data_agendada), "dd/MM 'às' HH:mm")
+    await createTimelineEvent(
+      clientId,
+      'call',
+      `Call ${numero_call} agendada para ${formattedDate}`,
+      produto_cliente_id,
+      new Date().toISOString(),
+    )
+  }
+
   // Tag: agendamento_proximo
   if (data_agendada) {
     const date = new Date(data_agendada)
@@ -167,6 +188,7 @@ export const realizeCall = async (
   duracao: number,
   clientId: string,
   productId: string,
+  callNumber?: number,
 ) => {
   const { data, error } = await supabase
     .from('calls')
@@ -181,8 +203,6 @@ export const realizeCall = async (
   if (error) throw error
 
   // Sync num_calls_realizadas
-  // We need to recount explicitly to be safe or just increment
-  // Let's recount
   const { count } = await supabase
     .from('calls')
     .select('id', { count: 'exact', head: true })
@@ -194,10 +214,28 @@ export const realizeCall = async (
     .update({ num_calls_realizadas: count || 0 })
     .eq('id', productId)
 
+  // Timeline Event
+  await createTimelineEvent(
+    clientId,
+    'call',
+    `Call ${callNumber || ''} realizada. Duração: ${duracao} min`,
+    productId,
+    dataRealizada,
+  )
+
   // Tags
   await updateTag(clientId, 'agendamento_proximo', false, productId)
   await updateTag(clientId, 'csat_pendente', true, productId)
   await updateTag(clientId, 'pendente_transcricao', true, productId)
+
+  // Follow-up for CSAT
+  await createTimelineEvent(
+    clientId,
+    'fup_csat',
+    'Enviar pesquisa de satisfação (CSAT)',
+    productId,
+    new Date().toISOString(),
+  )
 
   return data
 }
@@ -224,6 +262,14 @@ export const saveTranscription = async (
   // Tags
   await updateTag(clientId, 'pendente_transcricao', false, productId)
 
+  // Timeline Event
+  await createTimelineEvent(
+    clientId,
+    'sistema',
+    'Transcrição da call adicionada',
+    productId,
+  )
+
   return data
 }
 
@@ -234,10 +280,6 @@ export const sendCsat = async (
   clientId: string,
   productId: string,
 ) => {
-  // First, find conversation or just send to phone
-  // We assume conversation exists or we can send via phone
-  // We need a conversation_id for the internal chat system, but whatsapp service sends via API
-  // Let's check if conversation exists
   const { data: conversation } = await supabase
     .from('conversas_whatsapp')
     .select('id')
@@ -246,7 +288,6 @@ export const sendCsat = async (
 
   let convId = conversation?.id
   if (!convId) {
-    // Create conversation if not exists (simplified logic)
     const { data: newConv } = await supabase
       .from('conversas_whatsapp')
       .insert({ numero_whatsapp: phone, cliente_id: clientId })
@@ -268,10 +309,15 @@ export const sendCsat = async (
 
   if (error) throw error
 
-  // Tags - assuming we keep csat_pendente until answered? Or remove sent?
-  // Requirement says "Create csat_pendente when call is marked realized but CSAT is not yet sent."
-  // So we remove it now.
   await updateTag(clientId, 'csat_pendente', false, productId)
+
+  // Timeline Event
+  await createTimelineEvent(
+    clientId,
+    'fup_csat',
+    'Pesquisa CSAT enviada ao cliente',
+    productId,
+  )
 
   return data
 }
@@ -285,7 +331,6 @@ export const deleteCall = async (
 
   if (error) throw error
 
-  // Update produtos_cliente
   const updateObj: any = {}
   updateObj[`data_${callNumber}_call`] = null
   await supabase.from('produtos_cliente').update(updateObj).eq('id', productId)

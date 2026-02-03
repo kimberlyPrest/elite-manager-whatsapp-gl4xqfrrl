@@ -61,6 +61,14 @@ export const createProduct = async (clientId: string, productData: any) => {
 
   if (error) throw error
 
+  // Timeline Event
+  await createTimelineEvent(
+    clientId,
+    'sistema',
+    `Produto contratado: ${productData.produto}`,
+    data.id,
+  )
+
   // If Venda, insert into vendas
   if (productData.produto === 'Venda') {
     await supabase.from('vendas').insert({
@@ -87,6 +95,12 @@ export const updateProduct = async (
   clientId?: string,
   productName?: string,
 ) => {
+  const { data: previousData } = await supabase
+    .from('produtos_cliente')
+    .select('status')
+    .eq('id', productId)
+    .single()
+
   const { data, error } = await supabase
     .from('produtos_cliente')
     .update(updates)
@@ -96,13 +110,22 @@ export const updateProduct = async (
 
   if (error) throw error
 
-  if (createTimeline && clientId && productName) {
-    await createTimelineEvent(
-      clientId,
-      'Conclusão de Produto',
-      `Produto ${productName} marcado como ${updates.status}`,
-      productId,
-    )
+  if (createTimeline && clientId && productName && previousData) {
+    if (previousData.status !== updates.status) {
+      await createTimelineEvent(
+        clientId,
+        'mudanca_status',
+        `${previousData.status} → ${updates.status}`,
+        productId,
+      )
+    } else {
+      await createTimelineEvent(
+        clientId,
+        'sistema',
+        `Produto ${productName} atualizado`,
+        productId,
+      )
+    }
   }
 
   return data

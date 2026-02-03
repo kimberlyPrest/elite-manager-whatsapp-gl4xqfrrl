@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
+import { createTimelineEvent } from './timeline'
 
 export interface ClientProduct {
   id: string
@@ -148,10 +149,20 @@ export const createClient = async (
   productsData: NewProductPayload[],
 ) => {
   const { data, error } = await supabase.rpc('create_new_client', {
-    p_client_data: clientData as any, // Cast to any to avoid strict JSONB type mismatch with client
+    p_client_data: clientData as any,
     p_products_data: productsData as any,
   })
 
   if (error) throw error
+
+  // Add timeline event for client creation
+  await createTimelineEvent(
+    data,
+    'sistema',
+    'Cliente criado no sistema',
+    undefined,
+    new Date().toISOString(),
+  )
+
   return data
 }

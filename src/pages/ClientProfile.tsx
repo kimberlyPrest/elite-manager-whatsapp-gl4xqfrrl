@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Phone, FileText, Activity, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Phone, FileText, RefreshCw } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ClientProducts } from '@/components/clients/ClientProducts'
 import { ClientCalls } from '@/components/calls/ClientCalls'
+import { ClientTimeline } from '@/components/timeline/ClientTimeline'
 import { supabase } from '@/lib/supabase/client'
 import { Skeleton } from '@/components/ui/skeleton'
 import { recalculateTags } from '@/services/tags'
@@ -163,10 +164,7 @@ export default function ClientProfile() {
           </TabsContent>
 
           <TabsContent value="timeline">
-            <div className="p-8 text-center text-gray-500 bg-[#1a1a1a] rounded-lg border border-[#2a2a2a]">
-              <Activity className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>Timeline de Eventos (Em breve)</p>
-            </div>
+            <ClientTimeline clientId={id} />
           </TabsContent>
         </div>
       </Tabs>
