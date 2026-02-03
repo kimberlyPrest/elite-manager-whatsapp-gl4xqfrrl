@@ -120,7 +120,7 @@ export const sendWhatsAppMessage = async (
   }
 
   const response = await fetch(
-    `${config.url}/message/sendText/${config.instance}`,
+    `${config.url}/message/sendText/${encodeURIComponent(config.instance)}`,
     {
       method: 'POST',
       headers: {
@@ -215,7 +215,7 @@ export const checkInstanceConnection = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
   try {
     const response = await fetch(
-      `${url}/instance/connectionState/${config.instance}`,
+      `${url}/instance/connectionState/${encodeURIComponent(config.instance)}`,
       {
         method: 'GET',
         headers: {
@@ -246,7 +246,7 @@ export const connectInstance = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
 
   try {
-    const response = await fetch(`${url}/instance/connect/${config.instance}`, {
+    const response = await fetch(`${url}/instance/connect/${encodeURIComponent(config.instance)}`, {
       method: 'GET',
       headers: {
         apikey: config.apikey,
@@ -276,7 +276,7 @@ export const logoutInstance = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
 
   try {
-    const response = await fetch(`${url}/instance/logout/${config.instance}`, {
+    const response = await fetch(`${url}/instance/logout/${encodeURIComponent(config.instance)}`, {
       method: 'DELETE',
       headers: {
         apikey: config.apikey,
