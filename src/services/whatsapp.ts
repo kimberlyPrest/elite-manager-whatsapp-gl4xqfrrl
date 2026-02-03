@@ -394,7 +394,9 @@ export const syncHistory = async (config: EvolutionConfig) => {
     const data = await response.json()
     console.log('Evolution Sync Response:', data)
     // Data can be { messages: [...] } or just [...]
-    const messages = Array.isArray(data) ? data : (data.messages || data.data || [])
+    const messages = Array.isArray(data)
+      ? data
+      : data.messages || data.data || []
 
     if (!messages.length) return { count: 0 }
 
