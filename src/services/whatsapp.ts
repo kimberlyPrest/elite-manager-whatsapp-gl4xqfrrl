@@ -426,7 +426,7 @@ export const syncHistory = async (config: EvolutionConfig) => {
             // If msg already looks like the data part of webhook, great.
             // Usually findMessages returns the full message object similar to 'data' in webhook.
 
-            await fetch(webhookUrl, {
+            const response = await fetch(webhookUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -434,7 +434,13 @@ export const syncHistory = async (config: EvolutionConfig) => {
                 data: msg,
               }),
             })
-            syncedCount++
+
+            if (!response.ok) {
+              const errorText = await response.text()
+              console.error(`Webhook sync error for message ${msg.key?.id}:`, errorText)
+            } else {
+              syncedCount++
+            }
           } catch (err) {
             console.error('Failed to sync message:', err)
           }

@@ -18,12 +18,28 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     const body = await req.json()
+    console.log('Webhook received:', JSON.stringify(body))
     const { type, data } = body
 
-    // Only process messages.upsert for now
-    if (type === 'messages.upsert') {
+    // Support both 'type' (some versions) and 'event' (standard Evolution v2)
+    const eventType = type || body.event
+
+    // Only process messages.upsert
+    if (eventType === 'messages.upsert') {
       const messageData = data
-      const key = messageData.key
+
+      // If data contains an array of messages (Standard Evolution v2), process the first one
+      // This makes the function compatible with both single-message syncs and real-time arrays
+      const msg = Array.isArray(messageData.messages) ? messageData.messages[0] : messageData
+
+      if (!msg || !msg.key) {
+        console.warn('Ignoring message without key/data')
+        return new Response(JSON.stringify({ status: 'ignored_no_key' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const key = msg.key
       const remoteJid = key.remoteJid
 
       // Ignore status updates
@@ -34,15 +50,19 @@ Deno.serve(async (req: Request) => {
       }
 
       const phoneNumber = remoteJid.split('@')[0]
-      const pushName = messageData.pushName || phoneNumber
+      const pushName = msg.pushName || phoneNumber
       const fromMe = key.fromMe
 
       // Extract content (simplify for text)
       let content = ''
-      if (messageData.message?.conversation) {
-        content = messageData.message.conversation
-      } else if (messageData.message?.extendedTextMessage?.text) {
-        content = messageData.message.extendedTextMessage.text
+      if (msg.message?.conversation) {
+        content = msg.message.conversation
+      } else if (msg.message?.extendedTextMessage?.text) {
+        content = msg.message.extendedTextMessage.text
+      } else if (msg.message?.imageMessage?.caption) {
+        content = msg.message.imageMessage.caption
+      } else if (msg.message?.videoMessage?.caption) {
+        content = msg.message.videoMessage.caption
       } else {
         content = '[Mídia/Outro Formato]'
       }
