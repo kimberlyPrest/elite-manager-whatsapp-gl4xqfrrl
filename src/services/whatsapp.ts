@@ -294,3 +294,115 @@ export const logoutInstance = async (config: EvolutionConfig) => {
     throw new Error(error.message || 'Erro de rede ao desconectar')
   }
 }
+
+/**
+ * Configures the webhook for the instance.
+ */
+export const configureWebhook = async (config: EvolutionConfig) => {
+  const url = config.url.replace(/\/$/, '')
+  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-whatsapp`
+
+  try {
+    const response = await fetch(
+      `${url}/webhook/set/${encodeURIComponent(config.instance)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: config.apikey,
+        },
+        body: JSON.stringify({
+          webhookUrl,
+          webhookByEvents: false,
+          events: ['MESSAGES_UPSERT'],
+          enabled: true,
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(`Falha ao configurar webhook: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error: any) {
+    console.error('Webhook config failed:', error)
+    throw new Error(error.message || 'Erro ao configurar webhook')
+  }
+}
+
+/**
+ * Fetches history from Evolution API and syncs with Supabase.
+ */
+export const syncHistory = async (config: EvolutionConfig) => {
+  const url = config.url.replace(/\/$/, '')
+
+  try {
+    // 1. Fetch messages from Evolution
+    const response = await fetch(
+      `${url}/chat/findMessages/${encodeURIComponent(config.instance)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: config.apikey,
+        },
+        body: JSON.stringify({
+          where: {},
+          options: {
+            limit: 50, // Start with last 50 messages to simply verify
+            page: 1
+          }
+        })
+      }
+    )
+
+    if (!response.ok) {
+      // Fallback for some versions that use GET or different path
+      console.warn('POST findMessages failed, trying alternative...')
+      throw new Error(`Falha ao buscar mensagens: ${response.status}`)
+    }
+
+    const data = await response.json()
+    // Data can be { messages: [...] } or just [...]
+    const messages = Array.isArray(data) ? data : (data.messages || [])
+
+    if (!messages.length) return { count: 0 }
+
+    let syncedCount = 0
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+    const webhookUrl = `${supabaseUrl}/functions/v1/webhook-whatsapp`
+
+    // 2. Send each message to our webhook
+    // We do this in parallel chunks to be faster but not overwhelm
+    const chunkSize = 5
+    for (let i = 0; i < messages.length; i += chunkSize) {
+      const chunk = messages.slice(i, i + chunkSize)
+      await Promise.all(chunk.map(async (msg: any) => {
+        try {
+          // Adapt message to webhook format if needed
+          // If msg already looks like the data part of webhook, great.
+          // Usually findMessages returns the full message object similar to 'data' in webhook.
+
+          await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'messages.upsert',
+              data: msg
+            })
+          })
+          syncedCount++
+        } catch (err) {
+          console.error('Failed to sync message:', err)
+        }
+      }))
+    }
+
+    return { count: syncedCount }
+
+  } catch (error: any) {
+    console.error('History sync failed:', error)
+    throw new Error(error.message || 'Erro ao sincronizar histórico')
+  }
+}
