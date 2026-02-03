@@ -26,6 +26,62 @@ export interface CompletenessStats {
   totalPercentage: number
 }
 
+// Scope Types
+export interface ScopeBase {
+  description: string // Visão Geral / Descrição
+  targetAudience: string // Público Alvo
+  duration: string // Duração
+  investment: string // Investimento
+  methodology: string // Metodologia
+  callStructure: string // Estrutura de Calls
+  deliverables: string // Entregáveis
+  expectedResults: string // Resultados Esperados
+  differentials: string // Diferenciais
+  notRecommendedFor: string // Não recomendado para
+  requirements: string // Requisitos
+}
+
+export interface ScopeScale extends ScopeBase {
+  differenceFromElite: string
+  whenToRecommend: string
+  numberOfCalls: '6' | '8' | 'Flexible' | ''
+}
+
+export interface ScopeLabs extends ScopeBase {
+  deliveryModel: string
+  projectTypes: string
+  labsDifferentials: string
+}
+
+export interface Objection {
+  objection: string
+  response: string
+}
+
+export interface ScopeSales {
+  processDescription: string
+  qualificationCriteria: string // Qualified vs Disqualified
+  objections: Objection[]
+  nextSteps: string
+  supportMaterials: string
+}
+
+// Conversation Example Types
+export interface MessagePair {
+  client: string
+  ai: string
+}
+
+export interface ConversationExample {
+  id: string
+  title: string
+  category: string
+  context: string
+  pairs: MessagePair[]
+  createdAt: number
+  updatedAt: number
+}
+
 // Fetch all general context sections
 export const fetchContextSections = async (): Promise<ContextSection[]> => {
   const { data, error } = await supabase.from('contexto_geral').select('*')
@@ -44,6 +100,37 @@ export const saveContextSection = async (secao: string, conteudo: string) => {
 
   if (error) throw error
   return data
+}
+
+// Helper to save JSON data to context section
+export const saveContextJSON = async (secao: string, data: any) => {
+  return saveContextSection(secao, JSON.stringify(data))
+}
+
+// Helper to fetch JSON data from context section
+export const fetchContextJSON = async <T>(
+  secao: string,
+  defaultValue: T,
+): Promise<T> => {
+  const { data, error } = await supabase
+    .from('contexto_geral')
+    .select('conteudo')
+    .eq('secao', secao)
+    .single()
+
+  if (error && error.code !== 'PGRST116') {
+    console.error(`Error fetching ${secao}:`, error)
+    return defaultValue
+  }
+
+  if (!data?.conteudo) return defaultValue
+
+  try {
+    return JSON.parse(data.conteudo) as T
+  } catch (e) {
+    console.error(`Error parsing JSON for ${secao}:`, e)
+    return defaultValue
+  }
 }
 
 // Fetch all response templates
@@ -103,9 +190,6 @@ export const deleteTemplate = async (id: string) => {
 
 // Calculate completeness stats
 export const getCompletenessStats = async (): Promise<CompletenessStats> => {
-  // 1. Check products
-  // Replaced head: true with limit(0) to prevent "Unexpected end of JSON input" error
-  // while still obtaining the exact count.
   const { count: productsCount } = await supabase
     .from('produtos_cliente')
     .select('*', { count: 'exact' })
@@ -115,7 +199,6 @@ export const getCompletenessStats = async (): Promise<CompletenessStats> => {
     .from('contexto_geral')
     .select('secao, conteudo')
 
-  // Replaced head: true with limit(0) for robustness
   const { count: templatesCount } = await supabase
     .from('templates_resposta')
     .select('*', { count: 'exact' })
@@ -125,28 +208,32 @@ export const getCompletenessStats = async (): Promise<CompletenessStats> => {
     contextData?.map((c) => [c.secao, c.conteudo]) || [],
   )
 
-  // Rules:
-  // 25%: At least one product configured in `produtos_cliente` OR relevant context
   const products =
     (productsCount !== null && productsCount > 0) ||
     (!!contextMap.get('produtos_servicos') &&
       contextMap.get('produtos_servicos')!.length > 50)
 
-  // 25%: Institutional information filled
   const institutional =
     !!contextMap.get('institucional') &&
     contextMap.get('institucional')!.length > 50
 
-  // 25%: Tone of voice configured
   const toneOfVoice =
     !!contextMap.get('tom_de_voz') && contextMap.get('tom_de_voz')!.length > 20
 
-  // 15%: At least 3 templates
   const templates = templatesCount !== null && templatesCount >= 3
 
-  // 10%: At least 2 conversation examples (checking section 'exemplos_conversa' length or splitting by newlines/pattern)
-  const examplesContent = contextMap.get('exemplos_conversa') || ''
-  const examples = examplesContent.length > 100 // Simplified check
+  // Check if we have new structured examples OR old text examples
+  const oldExamples = contextMap.get('exemplos_conversa') || ''
+  const newExamplesRaw = contextMap.get('exemplos_conversas')
+  let newExamplesCount = 0
+  if (newExamplesRaw) {
+    try {
+      const parsed = JSON.parse(newExamplesRaw)
+      if (Array.isArray(parsed)) newExamplesCount = parsed.length
+    } catch {}
+  }
+
+  const examples = oldExamples.length > 100 || newExamplesCount >= 2
 
   let totalPercentage = 0
   if (products) totalPercentage += 25
@@ -208,14 +295,6 @@ export const importContextData = async (json: any) => {
       .from('templates_resposta')
       .upsert(
         json.templates_resposta.map((t: any) => ({
-          // We remove ID to avoid conflicts, or we can keep it if we want to overwrite specific records
-          // Let's keep existing logic but removing ID might be safer for "Import as new" behavior,
-          // but spec says "restore". Let's try to match by name or shortcut or just insert.
-          // For simplicity and safety: update if ID exists, insert if not.
-          // However, exported IDs might not match current DB if different instance.
-          // Strategy: Match by 'atalho' or 'nome'? No, standard import usually overwrites or adds.
-          // Spec says: "overwrite existing database records".
-          // We will use upsert. If ID is present and matches, it updates.
           nome: t.nome,
           conteudo: t.conteudo,
           atalho: t.atalho,

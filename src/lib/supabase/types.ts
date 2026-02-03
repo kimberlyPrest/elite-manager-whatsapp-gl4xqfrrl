@@ -191,6 +191,7 @@ export type Database = {
           cliente_id: string | null
           created_at: string
           data_envio: string | null
+          data_resposta: string | null
           enviar: boolean | null
           erro_mensagem: string | null
           id: string
@@ -199,12 +200,14 @@ export type Database = {
           numero_whatsapp: string
           status_envio: string | null
           tempo_espera_segundos: number | null
+          variacao_index: number | null
         }
         Insert: {
           automacao_id: string
           cliente_id?: string | null
           created_at?: string
           data_envio?: string | null
+          data_resposta?: string | null
           enviar?: boolean | null
           erro_mensagem?: string | null
           id?: string
@@ -213,12 +216,14 @@ export type Database = {
           numero_whatsapp: string
           status_envio?: string | null
           tempo_espera_segundos?: number | null
+          variacao_index?: number | null
         }
         Update: {
           automacao_id?: string
           cliente_id?: string | null
           created_at?: string
           data_envio?: string | null
+          data_resposta?: string | null
           enviar?: boolean | null
           erro_mensagem?: string | null
           id?: string
@@ -227,6 +232,7 @@ export type Database = {
           numero_whatsapp?: string
           status_envio?: string | null
           tempo_espera_segundos?: number | null
+          variacao_index?: number | null
         }
         Relationships: [
           {
@@ -507,31 +513,67 @@ export type Database = {
       }
       modelos_automacao: {
         Row: {
+          categoria: string | null
           configuracao: Json
           created_at: string
           descricao: string | null
+          dias_semana: Json | null
           filtros: Json
+          horario_comercial: boolean | null
+          horario_fim: string | null
+          horario_inicio: string | null
           id: string
+          intervalo_max_segundos: number | null
+          intervalo_min_segundos: number | null
           mensagens: Json
           nome: string
+          taxa_resposta_media: number | null
+          tipo_selecao: string | null
+          ultima_utilizacao: string | null
+          variacoes: Json | null
+          vezes_usado: number | null
         }
         Insert: {
+          categoria?: string | null
           configuracao?: Json
           created_at?: string
           descricao?: string | null
+          dias_semana?: Json | null
           filtros?: Json
+          horario_comercial?: boolean | null
+          horario_fim?: string | null
+          horario_inicio?: string | null
           id?: string
+          intervalo_max_segundos?: number | null
+          intervalo_min_segundos?: number | null
           mensagens?: Json
           nome: string
+          taxa_resposta_media?: number | null
+          tipo_selecao?: string | null
+          ultima_utilizacao?: string | null
+          variacoes?: Json | null
+          vezes_usado?: number | null
         }
         Update: {
+          categoria?: string | null
           configuracao?: Json
           created_at?: string
           descricao?: string | null
+          dias_semana?: Json | null
           filtros?: Json
+          horario_comercial?: boolean | null
+          horario_fim?: string | null
+          horario_inicio?: string | null
           id?: string
+          intervalo_max_segundos?: number | null
+          intervalo_min_segundos?: number | null
           mensagens?: Json
           nome?: string
+          taxa_resposta_media?: number | null
+          tipo_selecao?: string | null
+          ultima_utilizacao?: string | null
+          variacoes?: Json | null
+          vezes_usado?: number | null
         }
         Relationships: []
       }

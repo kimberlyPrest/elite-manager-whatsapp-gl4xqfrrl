@@ -4,6 +4,8 @@ import { Sparkles, Download, Upload } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ContextProgress } from '@/components/context/ContextProgress'
 import { GeneralContextForm } from '@/components/context/GeneralContextForm'
+import { ConsultancyScope } from '@/components/context/ConsultancyScope'
+import { ConversationExamples } from '@/components/context/ConversationExamples'
 import { TemplateManager } from '@/components/context/TemplateManager'
 import { AITesterModal } from '@/components/context/AITesterModal'
 import { ImportModal } from '@/components/context/ImportModal'
@@ -42,8 +44,6 @@ export default function Context() {
     }
   }
 
-  // Get current context summary for AI Tester (simplified)
-  // In a real app we might pass the full context, but for mock purposes we pass a string
   const contextSummary = 'Simulação de contexto carregado...'
 
   return (
@@ -55,7 +55,7 @@ export default function Context() {
             Gerencie a base de conhecimento e treine sua assistente.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
             className="border-[#2a2a2a] bg-[#1a1a1a] hover:bg-[#2a2a2a] text-white"
@@ -89,26 +89,54 @@ export default function Context() {
         onValueChange={setActiveTab}
         className="space-y-6"
       >
-        <TabsList className="bg-[#1a1a1a] border border-[#2a2a2a] p-1 h-auto">
-          <TabsTrigger
-            value="geral"
-            className="data-[state=active]:bg-yellow-500 data-[state=active]:text-black text-gray-400 px-6 py-2 transition-all"
-          >
-            Contexto Geral
-          </TabsTrigger>
-          <TabsTrigger
-            value="templates"
-            className="data-[state=active]:bg-yellow-500 data-[state=active]:text-black text-gray-400 px-6 py-2 transition-all"
-          >
-            Templates de Resposta
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-2">
+          <TabsList className="bg-[#1a1a1a] border border-[#2a2a2a] p-1 h-auto inline-flex min-w-max">
+            <TabsTrigger
+              value="geral"
+              className="data-[state=active]:bg-yellow-500 data-[state=active]:text-black text-gray-400 px-4 py-2 transition-all"
+            >
+              Contexto Geral
+            </TabsTrigger>
+            <TabsTrigger
+              value="escopo"
+              className="data-[state=active]:bg-yellow-500 data-[state=active]:text-black text-gray-400 px-4 py-2 transition-all"
+            >
+              Escopo da Consultoria
+            </TabsTrigger>
+            <TabsTrigger
+              value="exemplos"
+              className="data-[state=active]:bg-yellow-500 data-[state=active]:text-black text-gray-400 px-4 py-2 transition-all"
+            >
+              Exemplos de Conversas
+            </TabsTrigger>
+            <TabsTrigger
+              value="templates"
+              className="data-[state=active]:bg-yellow-500 data-[state=active]:text-black text-gray-400 px-4 py-2 transition-all"
+            >
+              Templates
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent
           value="geral"
           className="animate-fade-in focus-visible:outline-none"
         >
           <GeneralContextForm onUpdate={handleUpdate} />
+        </TabsContent>
+
+        <TabsContent
+          value="escopo"
+          className="animate-fade-in focus-visible:outline-none"
+        >
+          <ConsultancyScope onUpdate={handleUpdate} />
+        </TabsContent>
+
+        <TabsContent
+          value="exemplos"
+          className="animate-fade-in focus-visible:outline-none"
+        >
+          <ConversationExamples onUpdate={handleUpdate} />
         </TabsContent>
 
         <TabsContent
