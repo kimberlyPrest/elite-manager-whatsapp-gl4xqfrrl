@@ -15,6 +15,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      analytics_automacoes: {
+        Row: {
+          automacao_id: string
+          created_at: string
+          id: string
+          taxa_abertura: number | null
+          taxa_resposta: number | null
+          tempo_medio_envio_segundos: number | null
+          total_enviados: number | null
+          total_falhas: number | null
+          total_respostas: number | null
+          updated_at: string
+        }
+        Insert: {
+          automacao_id: string
+          created_at?: string
+          id?: string
+          taxa_abertura?: number | null
+          taxa_resposta?: number | null
+          tempo_medio_envio_segundos?: number | null
+          total_enviados?: number | null
+          total_falhas?: number | null
+          total_respostas?: number | null
+          updated_at?: string
+        }
+        Update: {
+          automacao_id?: string
+          created_at?: string
+          id?: string
+          taxa_abertura?: number | null
+          taxa_resposta?: number | null
+          tempo_medio_envio_segundos?: number | null
+          total_enviados?: number | null
+          total_falhas?: number | null
+          total_respostas?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'analytics_automacoes_automacao_id_fkey'
+            columns: ['automacao_id']
+            isOneToOne: false
+            referencedRelation: 'automacoes_massa'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       analytics_sugestoes_ia: {
         Row: {
           cliente_id: string | null
@@ -77,13 +124,16 @@ export type Database = {
       }
       automacoes_massa: {
         Row: {
+          configuracao_envio: Json | null
           created_at: string
           data_conclusao: string | null
           data_inicio: string | null
+          filtros_aplicados: Json | null
           id: string
           intervalo_max_segundos: number | null
           intervalo_min_segundos: number | null
-          mensagem_template: string
+          mensagem_template: string | null
+          proximo_envio_timestamp: string | null
           status_automacao: string
           tempo_estimado_segundos: number | null
           tipo_selecao: string
@@ -91,15 +141,19 @@ export type Database = {
           total_envios_falhados: number | null
           total_envios_planejados: number | null
           updated_at: string
+          variacoes_mensagem: Json | null
         }
         Insert: {
+          configuracao_envio?: Json | null
           created_at?: string
           data_conclusao?: string | null
           data_inicio?: string | null
+          filtros_aplicados?: Json | null
           id?: string
           intervalo_max_segundos?: number | null
           intervalo_min_segundos?: number | null
-          mensagem_template: string
+          mensagem_template?: string | null
+          proximo_envio_timestamp?: string | null
           status_automacao: string
           tempo_estimado_segundos?: number | null
           tipo_selecao: string
@@ -107,15 +161,19 @@ export type Database = {
           total_envios_falhados?: number | null
           total_envios_planejados?: number | null
           updated_at?: string
+          variacoes_mensagem?: Json | null
         }
         Update: {
+          configuracao_envio?: Json | null
           created_at?: string
           data_conclusao?: string | null
           data_inicio?: string | null
+          filtros_aplicados?: Json | null
           id?: string
           intervalo_max_segundos?: number | null
           intervalo_min_segundos?: number | null
-          mensagem_template?: string
+          mensagem_template?: string | null
+          proximo_envio_timestamp?: string | null
           status_automacao?: string
           tempo_estimado_segundos?: number | null
           tipo_selecao?: string
@@ -123,6 +181,7 @@ export type Database = {
           total_envios_falhados?: number | null
           total_envios_planejados?: number | null
           updated_at?: string
+          variacoes_mensagem?: Json | null
         }
         Relationships: []
       }
@@ -445,6 +504,36 @@ export type Database = {
             referencedColumns: ['id']
           },
         ]
+      }
+      modelos_automacao: {
+        Row: {
+          configuracao: Json
+          created_at: string
+          descricao: string | null
+          filtros: Json
+          id: string
+          mensagens: Json
+          nome: string
+        }
+        Insert: {
+          configuracao?: Json
+          created_at?: string
+          descricao?: string | null
+          filtros?: Json
+          id?: string
+          mensagens?: Json
+          nome: string
+        }
+        Update: {
+          configuracao?: Json
+          created_at?: string
+          descricao?: string | null
+          filtros?: Json
+          id?: string
+          mensagens?: Json
+          nome?: string
+        }
+        Relationships: []
       }
       produtos_cliente: {
         Row: {

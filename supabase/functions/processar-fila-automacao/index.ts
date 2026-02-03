@@ -13,17 +13,19 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Initialize Supabase Client with Service Role Key for admin access
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // 1. Get Active Automations ready to send
+    // We limit concurrency to 5 automations per execution to avoid rate limits
     const { data: automations, error: autoError } = await supabase
       .from('automacoes_massa')
       .select('*')
       .eq('status_automacao', 'ativa')
       .lte('proximo_envio_timestamp', new Date().toISOString())
-      .limit(5) // Process max 5 automations concurrently
+      .limit(5)
 
     if (autoError) throw autoError
     if (!automations || automations.length === 0) {
@@ -54,25 +56,34 @@ Deno.serve(async (req: Request) => {
       !config.evolution_apikey ||
       !config.evolution_instance
     ) {
-      // Log error but don't crash
       console.error('Missing Evolution API Config')
       return new Response(JSON.stringify({ error: 'Config missing' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
+    // Process each automation
     for (const automation of automations) {
       // 3. Get ONE pending recipient
-      const { data: recipient } = await supabase
+      // Using maybeSingle() to handle case where no recipients are left without throwing
+      const { data: recipient, error: recipientError } = await supabase
         .from('automacoes_massa_destinatarios')
         .select('*')
         .eq('automacao_id', automation.id)
         .eq('status_envio', 'aguardando')
         .limit(1)
-        .single()
+        .maybeSingle()
+
+      if (recipientError) {
+        console.error(
+          `Error fetching recipient for automation ${automation.id}:`,
+          recipientError,
+        )
+        continue
+      }
 
       if (!recipient) {
-        // No more recipients, mark as complete
+        // No more recipients, mark automation as complete
         await supabase
           .from('automacoes_massa')
           .update({ status_automacao: 'concluida' })
@@ -80,24 +91,38 @@ Deno.serve(async (req: Request) => {
         continue
       }
 
-      // 4. Send Message via Evolution
-      const response = await fetch(
-        `${config.evolution_url}/message/sendText/${config.evolution_instance}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: config.evolution_apikey,
-          },
-          body: JSON.stringify({
-            number: recipient.numero_whatsapp,
-            options: { delay: 0, presence: 'composing' },
-            textMessage: { text: recipient.mensagem_personalizada },
-          }),
-        },
-      )
+      // 4. Send Message via Evolution API
+      let success = false
+      let apiError = null
 
-      const success = response.ok
+      try {
+        const response = await fetch(
+          `${config.evolution_url}/message/sendText/${config.evolution_instance}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: config.evolution_apikey,
+            },
+            body: JSON.stringify({
+              number: recipient.numero_whatsapp,
+              options: { delay: 0, presence: 'composing' },
+              textMessage: { text: recipient.mensagem_personalizada || '' },
+            }),
+          },
+        )
+
+        if (response.ok) {
+          success = true
+        } else {
+          const text = await response.text()
+          apiError = `API Error: ${response.status} - ${text}`
+          console.error(`Evolution API Error: ${apiError}`)
+        }
+      } catch (e: any) {
+        apiError = `Network/System Error: ${e.message}`
+        console.error(`Fetch Error: ${apiError}`)
+      }
 
       // 5. Update Recipient Status
       await supabase
@@ -105,21 +130,102 @@ Deno.serve(async (req: Request) => {
         .update({
           status_envio: success ? 'enviado' : 'falhou',
           data_envio: new Date().toISOString(),
-          erro_mensagem: success ? null : `API Error: ${response.status}`,
+          erro_mensagem: apiError,
         })
         .eq('id', recipient.id)
 
-      // 6. Insert into Messages table for history
+      // 6. Handle Conversation History & Metadata
+      // Wrapped in try-catch to ensure automation continues even if logging fails
       if (success) {
-        await supabase.from('mensagens').insert({
-          conversa_id: '00000000-0000-0000-0000-000000000000', // Placeholder or need logic to find conversation
-          tipo: 'text',
-          conteudo: recipient.mensagem_personalizada || '',
-          timestamp: new Date().toISOString(),
-          status_leitura: true,
-          origem: 'me',
-          enviado_via: 'automation',
-        })
+        try {
+          // Normalize Phone Number (Remove non-digits)
+          const normalizedPhone = recipient.numero_whatsapp.replace(/\D/g, '')
+          const now = new Date().toISOString()
+
+          // A. Find Existing Conversation
+          let conversationId = null
+          const { data: existingConv } = await supabase
+            .from('conversas_whatsapp')
+            .select('id')
+            .eq('numero_whatsapp', normalizedPhone)
+            .maybeSingle()
+
+          if (existingConv) {
+            conversationId = existingConv.id
+          } else {
+            // B. Conversation not found, check for Client
+            let clientId = null
+            const { data: existingClient } = await supabase
+              .from('clientes')
+              .select('id')
+              .or(
+                `telefone.eq.${normalizedPhone},whatsapp_number.eq.${normalizedPhone}`,
+              )
+              .limit(1)
+              .maybeSingle()
+
+            if (existingClient) {
+              clientId = existingClient.id
+            } else {
+              // C. Client not found, create new Client
+              const { data: newClient } = await supabase
+                .from('clientes')
+                .insert({
+                  nome_completo: 'Contato Automação',
+                  telefone: normalizedPhone,
+                  whatsapp_number: normalizedPhone,
+                  pendente_classificacao: true,
+                })
+                .select('id')
+                .single()
+
+              if (newClient) clientId = newClient.id
+            }
+
+            // D. Create New Conversation linked to Client
+            if (clientId) {
+              const { data: newConv } = await supabase
+                .from('conversas_whatsapp')
+                .insert({
+                  cliente_id: clientId,
+                  numero_whatsapp: normalizedPhone,
+                  prioridade: 'Baixo',
+                  mensagens_nao_lidas: 0,
+                  ultima_interacao: now,
+                })
+                .select('id')
+                .single()
+
+              if (newConv) conversationId = newConv.id
+            }
+          }
+
+          // E. Insert Message and Update Conversation Metadata
+          if (conversationId) {
+            await supabase.from('mensagens').insert({
+              conversa_id: conversationId,
+              tipo: 'text', // Using 'text' to maintain consistency with frontend rendering
+              conteudo: recipient.mensagem_personalizada || '',
+              timestamp: now,
+              status_leitura: false,
+              origem: 'me',
+              enviado_via: 'sistema', // Marking as sent by system automation
+            })
+
+            // Update Conversation Metadata
+            await supabase
+              .from('conversas_whatsapp')
+              .update({
+                ultima_mensagem: recipient.mensagem_personalizada || '',
+                ultima_mensagem_timestamp: now,
+                ultima_interacao: now,
+              })
+              .eq('id', conversationId)
+          }
+        } catch (historyError) {
+          // Log error but do not fail the automation process
+          console.error('Failed to record conversation history:', historyError)
+        }
       }
 
       // 7. Update Automation Counters & Next Schedule
