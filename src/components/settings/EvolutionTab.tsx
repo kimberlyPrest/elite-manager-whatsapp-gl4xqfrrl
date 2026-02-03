@@ -478,8 +478,8 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
                   Sistema Online
                 </h4>
                 <p className="text-sm text-emerald-500/80">
-                  Sua instância <strong>{config.instance}</strong> está conectada
-                  e pronta para uso.
+                  Sua instância <strong>{config.instance}</strong> está
+                  conectada e pronta para uso.
                 </p>
               </div>
             </div>

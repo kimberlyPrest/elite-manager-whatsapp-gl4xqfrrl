@@ -357,10 +357,10 @@ export const syncHistory = async (config: EvolutionConfig) => {
           where: {},
           options: {
             limit: 50, // Start with last 50 messages to simply verify
-            page: 1
-          }
-        })
-      }
+            page: 1,
+          },
+        }),
+      },
     )
 
     if (!response.ok) {
@@ -371,7 +371,7 @@ export const syncHistory = async (config: EvolutionConfig) => {
 
     const data = await response.json()
     // Data can be { messages: [...] } or just [...]
-    const messages = Array.isArray(data) ? data : (data.messages || [])
+    const messages = Array.isArray(data) ? data : data.messages || []
 
     if (!messages.length) return { count: 0 }
 
@@ -384,29 +384,30 @@ export const syncHistory = async (config: EvolutionConfig) => {
     const chunkSize = 5
     for (let i = 0; i < messages.length; i += chunkSize) {
       const chunk = messages.slice(i, i + chunkSize)
-      await Promise.all(chunk.map(async (msg: any) => {
-        try {
-          // Adapt message to webhook format if needed
-          // If msg already looks like the data part of webhook, great.
-          // Usually findMessages returns the full message object similar to 'data' in webhook.
+      await Promise.all(
+        chunk.map(async (msg: any) => {
+          try {
+            // Adapt message to webhook format if needed
+            // If msg already looks like the data part of webhook, great.
+            // Usually findMessages returns the full message object similar to 'data' in webhook.
 
-          await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'messages.upsert',
-              data: msg
+            await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'messages.upsert',
+                data: msg,
+              }),
             })
-          })
-          syncedCount++
-        } catch (err) {
-          console.error('Failed to sync message:', err)
-        }
-      }))
+            syncedCount++
+          } catch (err) {
+            console.error('Failed to sync message:', err)
+          }
+        }),
+      )
     }
 
     return { count: syncedCount }
-
   } catch (error: any) {
     console.error('History sync failed:', error)
     throw new Error(error.message || 'Erro ao sincronizar histórico')
