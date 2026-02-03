@@ -315,7 +315,7 @@ export const configureWebhook = async (config: EvolutionConfig) => {
         url: webhookUrl,
         byEvents: false,
         events: ['MESSAGES_UPSERT'],
-      }
+      },
     }
 
     const response = await fetch(
