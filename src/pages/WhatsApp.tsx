@@ -1,199 +1,186 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { ChatSidebar } from '@/components/whatsapp/ChatSidebar'
+import { ChatWindow } from '@/components/whatsapp/ChatWindow'
+import { ProfileSidebar } from '@/components/whatsapp/ProfileSidebar'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { RefreshCcw, Smartphone, MessageSquare } from 'lucide-react'
+  getConversations,
+  getWhatsappConfig,
+  WhatsAppConversation,
+} from '@/services/whatsapp'
+import { MessageSquare, AlertTriangle } from 'lucide-react'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase/client'
 import { toast } from '@/hooks/use-toast'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Link } from 'react-router-dom'
 
 export default function WhatsApp() {
-  const [isConnected, setIsConnected] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [conversations, setConversations] = useState<WhatsAppConversation[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [showProfile, setShowProfile] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [configError, setConfigError] = useState(false)
 
-  const handleConnect = () => {
+  const isMobile = useIsMobile()
+
+  const loadData = async () => {
     setLoading(true)
-    // Simulate connection delay
-    setTimeout(() => {
+    try {
+      const config = await getWhatsappConfig()
+      if (!config.url || !config.apikey) {
+        setConfigError(true)
+      }
+      const data = await getConversations()
+      setConversations(data)
+    } catch (e) {
+      toast({ title: 'Erro ao carregar conversas', variant: 'destructive' })
+    } finally {
       setLoading(false)
-      setIsConnected(true)
-      toast({
-        title: 'Sucesso',
-        description: 'WhatsApp conectado com sucesso.',
-        className: 'border-primary text-foreground bg-background',
-      })
-    }, 2000)
+    }
   }
 
-  const handleDisconnect = () => {
-    setIsConnected(false)
-    toast({
-      title: 'Desconectado',
-      description: 'Sessão do WhatsApp encerrada.',
-      variant: 'destructive',
-    })
+  useEffect(() => {
+    loadData()
+
+    // Realtime subscription for conversation list updates
+    const channel = supabase
+      .channel('public:conversas_whatsapp')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'conversas_whatsapp' },
+        () => {
+          // Refresh list on any change
+          getConversations().then(setConversations)
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  const handleSelectConversation = (id: string) => {
+    setSelectedId(id)
+    if (isMobile) {
+      // Logic to handle mobile view navigation could be added here if not using direct layout switching
+    }
   }
 
-  const chats = [
-    {
-      id: 1,
-      name: 'João Silva',
-      message: 'Gostaria de agendar uma consultoria...',
-      time: '10:30',
-      unread: 2,
-    },
-    {
-      id: 2,
-      name: 'Maria Souza',
-      message: 'Obrigado pelo relatório!',
-      time: 'Ontem',
-      unread: 0,
-    },
-    {
-      id: 3,
-      name: 'Empresa X',
-      message: 'Podemos rever o contrato?',
-      time: 'Ontem',
-      unread: 0,
-    },
-    {
-      id: 4,
-      name: 'Carlos Oliveira',
-      message: 'Confirmado para amanhã.',
-      time: 'Terça',
-      unread: 1,
-    },
-  ]
+  const selectedConversation = conversations.find((c) => c.id === selectedId)
 
-  return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex flex-col md:flex-row gap-6">
-        <Card className="flex-1 bg-card border-border">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Status da Conexão
-              <Badge
-                variant={isConnected ? 'default' : 'destructive'}
-                className={isConnected ? 'bg-green-500 hover:bg-green-600' : ''}
-              >
-                {isConnected ? 'Conectado' : 'Desconectado'}
-              </Badge>
-            </CardTitle>
-            <CardDescription>
-              Gerencie a conexão do seu dispositivo WhatsApp
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center py-8">
-            {!isConnected ? (
-              <div className="text-center space-y-4">
-                {loading ? (
-                  <Skeleton className="h-48 w-48 mx-auto rounded-xl" />
-                ) : (
-                  <div className="h-48 w-48 mx-auto bg-white p-2 rounded-xl flex items-center justify-center">
-                    {/* Placeholder QR Code */}
-                    <img
-                      src="https://img.usecurling.com/i?q=qr-code&color=black"
-                      alt="QR Code"
-                      className="w-full h-full object-contain opacity-90"
-                    />
-                  </div>
-                )}
-                <p className="text-sm text-muted-foreground">
-                  Escaneie o QR Code com seu WhatsApp
-                </p>
-                <Button
-                  onClick={handleConnect}
-                  disabled={loading}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 w-full max-w-xs"
-                >
-                  {loading ? (
-                    <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Smartphone className="mr-2 h-4 w-4" />
-                  )}
-                  {loading ? 'Conectando...' : 'Gerar Novo QR Code'}
-                </Button>
-              </div>
-            ) : (
-              <div className="text-center space-y-4">
-                <div className="h-24 w-24 mx-auto rounded-full bg-green-500/10 flex items-center justify-center">
-                  <Smartphone className="h-12 w-12 text-green-500" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-foreground">
-                    Dispositivo Conectado
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Elite Manager Web (Chrome)
-                  </p>
-                </div>
-                <Button
-                  variant="destructive"
-                  onClick={handleDisconnect}
-                  className="w-full max-w-xs"
-                >
-                  Desconectar
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+  // Layout Logic
+  // Mobile:
+  // - List View: !selectedId
+  // - Chat View: selectedId && !showProfile
+  // - Profile View: selectedId && showProfile
 
-        <Card className="flex-1 md:flex-[1.5] bg-card border-border">
-          <CardHeader>
-            <CardTitle>Conversas Recentes</CardTitle>
-            <CardDescription>Últimas interações processadas</CardDescription>
-          </CardHeader>
-          <CardContent className="px-0">
-            <div className="space-y-1">
-              {chats.map((chat) => (
-                <div
-                  key={chat.id}
-                  className="flex items-start gap-3 p-4 hover:bg-muted/50 transition-colors cursor-pointer border-l-2 border-transparent hover:border-primary"
-                >
-                  <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center shrink-0">
-                    <span className="font-semibold text-primary">
-                      {chat.name.charAt(0)}
-                    </span>
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-foreground truncate">
-                        {chat.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {chat.time}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
-                      {chat.message}
-                    </p>
-                  </div>
-                  {chat.unread > 0 && (
-                    <Badge className="bg-primary text-primary-foreground h-5 w-5 rounded-full flex items-center justify-center p-0 text-[10px]">
-                      {chat.unread}
-                    </Badge>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="p-4 border-t border-border mt-2">
-              <Button
-                variant="outline"
-                className="w-full text-primary border-primary/50 hover:bg-primary/10 hover:text-primary"
-              >
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Ver todas as conversas
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+  if (configError) {
+    return (
+      <div className="h-[calc(100vh-4rem)] flex items-center justify-center bg-[#0a0a0a]">
+        <div className="text-center space-y-4 max-w-md p-6 bg-[#1a1a1a] rounded-xl border border-red-900/50">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto" />
+          <h2 className="text-xl font-bold text-white">
+            WhatsApp Desconectado
+          </h2>
+          <p className="text-gray-400">
+            A integração com a Evolution API não está configurada corretamente.
+          </p>
+          <Link to="/settings">
+            <button className="bg-[#FFD700] text-black px-4 py-2 rounded font-semibold hover:bg-[#FFD700]/90 mt-2">
+              Ir para Configurações
+            </button>
+          </Link>
+        </div>
       </div>
+    )
+  }
+
+  if (isMobile) {
+    if (selectedId && showProfile && selectedConversation) {
+      return (
+        <div className="h-[calc(100vh-4rem)]">
+          <ProfileSidebar
+            conversation={selectedConversation}
+            onClose={() => setShowProfile(false)}
+          />
+        </div>
+      )
+    }
+    if (selectedId && selectedConversation) {
+      return (
+        <div className="h-[calc(100vh-4rem)] flex flex-col">
+          <button
+            onClick={() => setSelectedId(null)}
+            className="p-2 bg-[#111111] text-gray-400 text-xs text-left border-b border-[#2a2a2a]"
+          >
+            &larr; Voltar para lista
+          </button>
+          <ChatWindow
+            conversation={selectedConversation}
+            onToggleProfile={() => setShowProfile(true)}
+          />
+        </div>
+      )
+    }
+    return (
+      <div className="h-[calc(100vh-4rem)]">
+        <ChatSidebar
+          conversations={conversations}
+          onSelect={setSelectedId}
+          onRefresh={loadData}
+          loading={loading}
+        />
+      </div>
+    )
+  }
+
+  // Desktop Layout
+  return (
+    <div className="h-[calc(100vh-4rem)] flex overflow-hidden border border-[#2a2a2a] rounded-lg bg-[#0a0a0a]">
+      {/* Sidebar */}
+      <div className="w-[320px] shrink-0 border-r border-[#2a2a2a]">
+        <ChatSidebar
+          conversations={conversations}
+          selectedId={selectedId || undefined}
+          onSelect={handleSelectConversation}
+          onRefresh={loadData}
+          loading={loading}
+        />
+      </div>
+
+      {/* Chat Area */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {selectedConversation ? (
+          <ChatWindow
+            conversation={selectedConversation}
+            onToggleProfile={() => setShowProfile(!showProfile)}
+          />
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-center bg-[#0a0a0a] text-gray-500">
+            <div className="h-20 w-20 bg-[#FFD700]/10 rounded-full flex items-center justify-center mb-4">
+              <MessageSquare className="h-10 w-10 text-[#FFD700]" />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">
+              Selecione uma conversa para começar
+            </h2>
+            <p className="max-w-xs">
+              Escolha um cliente na lista ao lado para visualizar o histórico e
+              enviar mensagens.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Profile Sidebar */}
+      {selectedConversation && showProfile && (
+        <div className="w-[280px] shrink-0 border-l border-[#2a2a2a] animate-in slide-in-from-right duration-300">
+          <ProfileSidebar
+            conversation={selectedConversation}
+            onClose={() => setShowProfile(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }
