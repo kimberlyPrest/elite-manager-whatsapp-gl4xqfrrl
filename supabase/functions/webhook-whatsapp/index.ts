@@ -55,6 +55,11 @@ Deno.serve(async (req: Request) => {
       const pushName = msg.pushName || phoneNumber
       const fromMe = key.fromMe
 
+      // Extract original timestamp (Evolution sends in seconds)
+      const messageDate = msg.messageTimestamp
+        ? new Date(msg.messageTimestamp * 1000).toISOString()
+        : new Date().toISOString()
+
       // Extract content (simplify for text)
       let content = ''
       if (msg.message?.conversation) {
@@ -81,31 +86,37 @@ Deno.serve(async (req: Request) => {
       if (clientError) throw clientError
 
       // 2. Upsert Conversation
-      const now = new Date().toISOString()
       let conversationId
 
       const { data: existingConv } = await supabase
         .from('conversas_whatsapp')
-        .select('id, mensagens_nao_lidas')
+        .select('id, mensagens_nao_lidas, ultima_mensagem_timestamp')
         .eq('numero_whatsapp', phoneNumber)
         .single()
 
       if (existingConv) {
         conversationId = existingConv.id
-        const newUnread = fromMe
-          ? 0
-          : (existingConv.mensagens_nao_lidas || 0) + 1
 
-        await supabase
-          .from('conversas_whatsapp')
-          .update({
-            ultima_mensagem: content,
-            ultima_mensagem_timestamp: now,
-            ultima_interacao: now,
-            mensagens_nao_lidas: newUnread,
-            updated_at: now,
-          })
-          .eq('id', conversationId)
+        // Only update 'last_message' fields if this message is newer than the one we have
+        const isNewer = !existingConv.ultima_mensagem_timestamp ||
+          new Date(messageDate) > new Date(existingConv.ultima_mensagem_timestamp)
+
+        if (isNewer) {
+          const newUnread = fromMe
+            ? 0
+            : (existingConv.mensagens_nao_lidas || 0) + 1
+
+          await supabase
+            .from('conversas_whatsapp')
+            .update({
+              ultima_mensagem: content,
+              ultima_mensagem_timestamp: messageDate,
+              ultima_interacao: messageDate,
+              mensagens_nao_lidas: newUnread,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', conversationId)
+        }
       } else {
         const { data: newConv, error: convError } = await supabase
           .from('conversas_whatsapp')
@@ -113,8 +124,8 @@ Deno.serve(async (req: Request) => {
             cliente_id: clientId,
             numero_whatsapp: phoneNumber,
             ultima_mensagem: content,
-            ultima_mensagem_timestamp: now,
-            ultima_interacao: now,
+            ultima_mensagem_timestamp: messageDate,
+            ultima_interacao: messageDate,
             mensagens_nao_lidas: fromMe ? 0 : 1,
             prioridade: 'Médio',
             score_prioridade: 0,
@@ -126,15 +137,18 @@ Deno.serve(async (req: Request) => {
         conversationId = newConv.id
       }
 
-      // 3. Insert Message
-      await supabase.from('mensagens').insert({
+      // 3. Insert Message (Use original timestamp)
+      // Use ON CONFLICT to avoid duplicate messages during multiple syncs
+      await supabase.from('mensagens').upsert({
         conversa_id: conversationId,
         tipo: 'text',
         conteudo: content,
-        timestamp: now,
+        timestamp: messageDate,
         status_leitura: fromMe ? true : false,
         origem: fromMe ? 'me' : 'contact',
         message_id: key.id,
+      }, {
+        onConflict: 'message_id'
       })
 
       // 4. Trigger Priority Recalculation

@@ -358,74 +358,74 @@ export const syncHistory = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
 
   try {
-    // 1. Fetch messages from Evolution
-    const response = await fetch(
-      `${url}/chat/findMessages/${encodeURIComponent(config.instance)}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: config.apikey,
-        },
-        body: JSON.stringify({
-          where: {},
-          options: {
-            limit: 50, // Start with last 50 messages to simply verify
-            page: 1,
+    let allMessages: any[] = []
+    let currentPage = 1
+    let totalPages = 1
+    const limit = 100 // Larger limit for efficiency
+
+    // Helper to fetch a single page
+    const fetchPage = async (page: number) => {
+      const resp = await fetch(
+        `${url}/chat/findMessages/${encodeURIComponent(config.instance)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: config.apikey,
           },
-        }),
-      },
-    )
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      try {
-        const errorJson = JSON.parse(errorText)
-        throw new Error(
-          `Erro API: ${errorJson.response?.message || errorJson.message || JSON.stringify(errorJson)}`,
-        )
-      } catch (e) {
-        throw new Error(
-          `Falha ao buscar mensagens: ${response.status} - ${errorText}`,
-        )
-      }
+          body: JSON.stringify({
+            where: {},
+            options: { limit, page },
+          }),
+        },
+      )
+      if (!resp.ok) throw new Error(`Erro na página ${page}: ${resp.status}`)
+      return await resp.json()
     }
 
-    const data = await response.json()
-    console.log('Evolution Sync Response:', data)
+    // Fetch first page to get total
+    const firstPage = await fetchPage(1)
+    console.log('Sync First Page Result:', firstPage)
 
-    // In Evolution v2, messages are in data.messages.records
-    let messages: any[] = []
-    if (Array.isArray(data)) {
-      messages = data
-    } else if (data.messages?.records && Array.isArray(data.messages.records)) {
-      messages = data.messages.records
-    } else if (Array.isArray(data.messages)) {
-      messages = data.messages
-    } else if (Array.isArray(data.data)) {
-      messages = data.data
+    const extractRecords = (data: any) => {
+      if (Array.isArray(data)) return data
+      if (data.messages?.records) return data.messages.records
+      if (Array.isArray(data.messages)) return data.messages
+      if (Array.isArray(data.data)) return data.data
+      return []
     }
 
-    console.log('Total messages found for sync:', messages.length)
+    allMessages = extractRecords(firstPage)
+    totalPages = firstPage.messages?.pages || 1
 
-    if (messages.length === 0) return { count: 0 }
+    // Fetch up to 500 messages (5 pages) for now to avoid browser lockup
+    // 12k messages would require a different architecture (background job)
+    const maxPages = Math.min(totalPages, 5)
+
+    for (let p = 2; p <= maxPages; p++) {
+      const nextData = await fetchPage(p)
+      allMessages = [...allMessages, ...extractRecords(nextData)]
+    }
+
+    console.log(`Total messages fetched for sync: ${allMessages.length} (from ${maxPages} pages)`)
+
+    if (allMessages.length === 0) return { count: 0 }
+
+    // IMPORTANT: Reverse messages because Evolution returns newest first
+    // We want to insert from oldest to newest to maintain logical state (unread, last message, etc)
+    const orderedMessages = [...allMessages].reverse()
 
     let syncedCount = 0
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
     const webhookUrl = `${supabaseUrl}/functions/v1/webhook-whatsapp`
 
-    // 2. Send each message to our webhook
-    // We do this in parallel chunks to be faster but not overwhelm
+    // Limit concurrency to avoid overloading the function
     const chunkSize = 5
-    for (let i = 0; i < messages.length; i += chunkSize) {
-      const chunk = messages.slice(i, i + chunkSize)
+    for (let i = 0; i < orderedMessages.length; i += chunkSize) {
+      const chunk = orderedMessages.slice(i, i + chunkSize)
       await Promise.all(
         chunk.map(async (msg: any) => {
           try {
-            // Adapt message to webhook format if needed
-            // If msg already looks like the data part of webhook, great.
-            // Usually findMessages returns the full message object similar to 'data' in webhook.
-
             const response = await fetch(webhookUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
