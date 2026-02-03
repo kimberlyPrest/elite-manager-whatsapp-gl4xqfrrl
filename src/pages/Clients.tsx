@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Search, UserPlus, Users } from 'lucide-react'
+import { Search, UserPlus, Users, RefreshCw } from 'lucide-react'
 import {
   getClients,
   getClientCounts,
@@ -15,6 +15,7 @@ import { ImportClientsModal } from '@/components/clients/ImportClientsModal'
 import { useDebounce } from '@/hooks/use-debounce'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
+import { recalculateTags } from '@/services/tags'
 
 export default function Clients() {
   const [clients, setClients] = useState<Client[]>([])
@@ -29,12 +30,42 @@ export default function Clients() {
     Venda: 0,
     Pendente: 0,
   })
+  const [isRecalculating, setIsRecalculating] = useState(false)
 
   const debouncedSearch = useDebounce(searchTerm, 300)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   const handleRefresh = () => {
     setRefreshTrigger((prev) => prev + 1)
+  }
+
+  const handleRecalculateTags = async () => {
+    setIsRecalculating(true)
+    toast({
+      title: 'Recalculando tags...',
+      description: 'Isso pode levar alguns instantes.',
+    })
+
+    try {
+      const result = await recalculateTags()
+
+      if (result.success) {
+        toast({
+          title: 'Tags Atualizadas',
+          description: `Processado: ${result.processados} clientes. Criadas: ${result.tags_criadas}.`,
+          className: 'bg-green-600 text-white border-green-700',
+        })
+        handleRefresh()
+      }
+    } catch (error) {
+      toast({
+        title: 'Erro ao recalcular tags',
+        description: 'Tente novamente mais tarde.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsRecalculating(false)
+    }
   }
 
   useEffect(() => {
@@ -83,8 +114,21 @@ export default function Clients() {
           </p>
         </div>
 
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto items-center">
+          <Button
+            variant="outline"
+            className="border-[#2a2a2a] bg-[#1a1a1a] text-gray-400 hover:text-white hover:bg-[#2a2a2a] hover:border-[#3a3a3a]"
+            onClick={handleRecalculateTags}
+            disabled={isRecalculating}
+          >
+            <RefreshCw
+              className={cn('mr-2 h-4 w-4', isRecalculating && 'animate-spin')}
+            />
+            {isRecalculating ? 'Recalculando...' : 'Recalcular Tags'}
+          </Button>
+
           <ImportClientsModal onSuccess={handleRefresh} />
+
           <NewClientModal
             onSuccess={handleRefresh}
             trigger={

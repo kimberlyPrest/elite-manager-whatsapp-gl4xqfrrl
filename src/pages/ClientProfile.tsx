@@ -1,17 +1,28 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, User, Phone, FileText, Activity } from 'lucide-react'
+import {
+  ArrowLeft,
+  User,
+  Phone,
+  FileText,
+  Activity,
+  RefreshCw,
+} from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ClientProducts } from '@/components/clients/ClientProducts'
 import { supabase } from '@/lib/supabase/client'
 import { Skeleton } from '@/components/ui/skeleton'
+import { recalculateTags } from '@/services/tags'
+import { toast } from '@/hooks/use-toast'
+import { cn } from '@/lib/utils'
 
 export default function ClientProfile() {
   const { id } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const [clientName, setClientName] = useState('')
   const [loading, setLoading] = useState(true)
+  const [isUpdatingTags, setIsUpdatingTags] = useState(false)
 
   const tab = searchParams.get('tab') || 'produtos'
 
@@ -33,6 +44,29 @@ export default function ClientProfile() {
     setSearchParams({ tab: value })
   }
 
+  const handleUpdateTags = async () => {
+    if (!id) return
+    setIsUpdatingTags(true)
+    try {
+      const result = await recalculateTags(id)
+      if (result.success) {
+        toast({
+          title: 'Tags Atualizadas',
+          description: 'As tags do cliente foram recalculadas com sucesso.',
+          className: 'bg-green-600 text-white border-green-700',
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Erro ao atualizar tags',
+        description: 'Não foi possível atualizar as tags. Tente novamente.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsUpdatingTags(false)
+    }
+  }
+
   if (loading)
     return (
       <div className="p-8">
@@ -44,22 +78,37 @@ export default function ClientProfile() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-4 md:p-8 animate-fade-in pb-20">
-      <div className="flex items-center gap-4">
-        <Link to="/clients">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hover:bg-[#2a2a2a] text-white"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-white">{clientName}</h1>
-          <p className="text-muted-foreground text-sm">
-            Gerenciamento do Cliente
-          </p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link to="/clients">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hover:bg-[#2a2a2a] text-white"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-white">{clientName}</h1>
+            <p className="text-muted-foreground text-sm">
+              Gerenciamento do Cliente
+            </p>
+          </div>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-[#2a2a2a] bg-[#1a1a1a] text-gray-400 hover:text-white hover:bg-[#2a2a2a] hover:border-[#3a3a3a]"
+          onClick={handleUpdateTags}
+          disabled={isUpdatingTags}
+        >
+          <RefreshCw
+            className={cn('mr-2 h-4 w-4', isUpdatingTags && 'animate-spin')}
+          />
+          {isUpdatingTags ? 'Atualizando...' : 'Atualizar Tags'}
+        </Button>
       </div>
 
       <Tabs value={tab} onValueChange={handleTabChange} className="w-full">
