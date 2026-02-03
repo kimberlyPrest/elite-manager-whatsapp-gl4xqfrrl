@@ -5,10 +5,8 @@ import {
   startOfMonth,
   subMonths,
   format,
-  differenceInMinutes,
   parseISO,
 } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 
 export type Period =
   | 'hoje'
@@ -29,10 +27,11 @@ export const getDateRange = (period: Period) => {
       return { start: subDays(now, 30), end: now }
     case 'este_mes':
       return { start: startOfMonth(now), end: now }
-    case 'mes_passado':
+    case 'mes_passado': {
       const startLastMonth = startOfMonth(subMonths(now, 1))
       const endLastMonth = startOfMonth(now) // Start of this month is end of last month roughly for range
       return { start: startLastMonth, end: endLastMonth }
+    }
     default:
       return { start: subDays(now, 30), end: now }
   }
