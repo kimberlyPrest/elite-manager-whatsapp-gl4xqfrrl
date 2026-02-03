@@ -294,6 +294,8 @@ export type Database = {
           mensagens_nao_lidas: number | null
           numero_whatsapp: string
           prioridade: string | null
+          prioridade_manual: boolean | null
+          score_prioridade: number | null
           ultima_interacao: string | null
           ultima_mensagem: string | null
           ultima_mensagem_timestamp: string | null
@@ -306,6 +308,8 @@ export type Database = {
           mensagens_nao_lidas?: number | null
           numero_whatsapp: string
           prioridade?: string | null
+          prioridade_manual?: boolean | null
+          score_prioridade?: number | null
           ultima_interacao?: string | null
           ultima_mensagem?: string | null
           ultima_mensagem_timestamp?: string | null
@@ -318,6 +322,8 @@ export type Database = {
           mensagens_nao_lidas?: number | null
           numero_whatsapp?: string
           prioridade?: string | null
+          prioridade_manual?: boolean | null
+          score_prioridade?: number | null
           ultima_interacao?: string | null
           ultima_mensagem?: string | null
           ultima_mensagem_timestamp?: string | null
@@ -340,6 +346,8 @@ export type Database = {
           created_at: string
           enviado_via: string | null
           id: string
+          message_id: string | null
+          origem: string | null
           status_leitura: boolean | null
           timestamp: string | null
           tipo: string
@@ -350,6 +358,8 @@ export type Database = {
           created_at?: string
           enviado_via?: string | null
           id?: string
+          message_id?: string | null
+          origem?: string | null
           status_leitura?: boolean | null
           timestamp?: string | null
           tipo: string
@@ -360,6 +370,8 @@ export type Database = {
           created_at?: string
           enviado_via?: string | null
           id?: string
+          message_id?: string | null
+          origem?: string | null
           status_leitura?: boolean | null
           timestamp?: string | null
           tipo?: string
@@ -657,6 +669,10 @@ export type Database = {
     Functions: {
       create_new_client: {
         Args: { p_client_data: Json; p_products_data: Json }
+        Returns: string
+      }
+      upsert_client_by_phone: {
+        Args: { p_name: string; p_phone: string }
         Returns: string
       }
     }

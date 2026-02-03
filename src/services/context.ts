@@ -104,17 +104,22 @@ export const deleteTemplate = async (id: string) => {
 // Calculate completeness stats
 export const getCompletenessStats = async (): Promise<CompletenessStats> => {
   // 1. Check products
+  // Replaced head: true with limit(0) to prevent "Unexpected end of JSON input" error
+  // while still obtaining the exact count.
   const { count: productsCount } = await supabase
     .from('produtos_cliente')
-    .select('*', { count: 'exact', head: true })
+    .select('*', { count: 'exact' })
+    .limit(0)
 
   const { data: contextData } = await supabase
     .from('contexto_geral')
     .select('secao, conteudo')
 
+  // Replaced head: true with limit(0) for robustness
   const { count: templatesCount } = await supabase
     .from('templates_resposta')
-    .select('*', { count: 'exact', head: true })
+    .select('*', { count: 'exact' })
+    .limit(0)
 
   const contextMap = new Map(
     contextData?.map((c) => [c.secao, c.conteudo]) || [],
