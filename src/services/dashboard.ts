@@ -38,13 +38,19 @@ export const getDateRange = (period: Period) => {
 }
 
 // Helper to safely get count with head: true to avoid JSON parsing errors on empty body
-const safeCount = async (query: any) => {
-  const { count, error } = await query
-  if (error) {
-    console.error('Count query error:', error)
+// It specifically handles "Unexpected end of JSON input" errors that can occur with HEAD requests
+const safeCount = async (query: Promise<any>) => {
+  try {
+    const { count, error } = await query
+    if (error) {
+      console.error('Count query error:', error)
+      return 0
+    }
+    return count || 0
+  } catch (error) {
+    console.warn('Safe count exception (handled):', error)
     return 0
   }
-  return count || 0
 }
 
 export const fetchDashboardMetrics = async (period: Period) => {
@@ -61,58 +67,71 @@ export const fetchDashboardMetrics = async (period: Period) => {
     const now = new Date()
 
     // Execute independent groups of queries in parallel
+    // Using safeCount for HEAD requests to prevent crashes
+
+    // 1. Clients
+    const clientsPromise = Promise.all([
+      safeCount(
+        supabase.from('clientes').select('*', { count: 'exact', head: true }),
+      ),
+      safeCount(
+        supabase
+          .from('clientes')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', startIso),
+      ),
+    ])
+
+    // 2. Active Conversations (Last 30 days)
+    const conversationsPromise = supabase
+      .from('conversas_whatsapp')
+      .select('id, prioridade, mensagens_nao_lidas, ultima_interacao')
+      .gte('ultima_interacao', subDays(new Date(), 30).toISOString())
+
+    // 3. Calls (Optimized: Count Total, Count Week, Fetch Next)
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const callsPromise = Promise.all([
+      // Total future calls
+      safeCount(
+        supabase
+          .from('calls')
+          .select('*', { count: 'exact', head: true })
+          .gte('data_agendada', now.toISOString()),
+      ),
+      // Calls this week
+      safeCount(
+        supabase
+          .from('calls')
+          .select('*', { count: 'exact', head: true })
+          .gte('data_agendada', now.toISOString())
+          .lte('data_agendada', nextWeek.toISOString()),
+      ),
+      // Next call details (Not a count query, so we don't use safeCount)
+      supabase
+        .from('calls')
+        .select('id, data_agendada, produto_cliente_id')
+        .gte('data_agendada', now.toISOString())
+        .order('data_agendada', { ascending: true })
+        .limit(1),
+    ])
+
+    // 4. Tags
+    const tagsPromise = supabase
+      .from('tags_cliente')
+      .select('tipo_tag, cliente_id')
+      .eq('ativo', true)
+
     const [clientsData, activeConversationsData, callsData, tagsData] =
       await Promise.all([
-        // 1. Clients
-        Promise.all([
-          supabase.from('clientes').select('*', { count: 'exact', head: true }),
-          supabase
-            .from('clientes')
-            .select('*', { count: 'exact', head: true })
-            .gte('created_at', startIso),
-        ]),
-
-        // 2. Active Conversations (Last 30 days)
-        supabase
-          .from('conversas_whatsapp')
-          .select('id, prioridade, mensagens_nao_lidas, ultima_interacao')
-          .gte('ultima_interacao', subDays(new Date(), 30).toISOString()),
-
-        // 3. Calls (Optimized: Count Total, Count Week, Fetch Next)
-        Promise.all([
-          // Total future calls
-          supabase
-            .from('calls')
-            .select('*', { count: 'exact', head: true })
-            .gte('data_agendada', now.toISOString()),
-          // Calls this week
-          supabase
-            .from('calls')
-            .select('*', { count: 'exact', head: true })
-            .gte('data_agendada', now.toISOString())
-            .lte(
-              'data_agendada',
-              new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            ),
-          // Next call details
-          supabase
-            .from('calls')
-            .select('id, data_agendada, produto_cliente_id')
-            .gte('data_agendada', now.toISOString())
-            .order('data_agendada', { ascending: true })
-            .limit(1),
-        ]),
-
-        // 4. Tags
-        supabase
-          .from('tags_cliente')
-          .select('tipo_tag, cliente_id')
-          .eq('ativo', true),
+        clientsPromise,
+        conversationsPromise,
+        callsPromise,
+        tagsPromise,
       ])
 
     // Process Clients
-    const totalClients = clientsData[0].count || 0
-    const newClients = clientsData[1].count || 0
+    const totalClients = clientsData[0]
+    const newClients = clientsData[1]
 
     // Process Conversations
     const activeConversations = activeConversationsData.data || []
@@ -126,9 +145,9 @@ export const fetchDashboardMetrics = async (period: Period) => {
     ).length
 
     // Process Calls
-    const totalCalls = callsData[0].count || 0
-    const callsThisWeek = callsData[1].count || 0
-    const nextCall = callsData[2].data?.[0]
+    const totalCalls = callsData[0]
+    const callsThisWeek = callsData[1]
+    const nextCall = (callsData[2] as any).data?.[0]
 
     let nextCallDetails = null
     if (nextCall) {
@@ -282,42 +301,50 @@ export const fetchTaskLists = async () => {
     const now = new Date()
     const next48h = new Date(now.getTime() + 48 * 60 * 60 * 1000)
 
-    const [csatRes, transcriptionRes, noResponseRes, upcomingRes] =
+    const [csatCount, transcriptionCount, noResponseCount, upcomingCount] =
       await Promise.all([
         // CSAT Pending
-        supabase
-          .from('calls')
-          .select('id', { count: 'exact', head: true })
-          .lt('data_realizada', now.toISOString())
-          .eq('csat_enviado', false),
+        safeCount(
+          supabase
+            .from('calls')
+            .select('id', { count: 'exact', head: true })
+            .lt('data_realizada', now.toISOString())
+            .eq('csat_enviado', false),
+        ),
 
         // Missing Transcriptions
-        supabase
-          .from('calls')
-          .select('id', { count: 'exact', head: true })
-          .lt('data_realizada', now.toISOString())
-          .is('transcricao', null),
+        safeCount(
+          supabase
+            .from('calls')
+            .select('id', { count: 'exact', head: true })
+            .lt('data_realizada', now.toISOString())
+            .is('transcricao', null),
+        ),
 
         // No Response Tags
-        supabase
-          .from('tags_cliente')
-          .select('id', { count: 'exact', head: true })
-          .ilike('tipo_tag', 'sem_resposta_%')
-          .eq('ativo', true),
+        safeCount(
+          supabase
+            .from('tags_cliente')
+            .select('id', { count: 'exact', head: true })
+            .ilike('tipo_tag', 'sem_resposta_%')
+            .eq('ativo', true),
+        ),
 
         // Upcoming Calls (48h)
-        supabase
-          .from('calls')
-          .select('id', { count: 'exact', head: true })
-          .gte('data_agendada', now.toISOString())
-          .lte('data_agendada', next48h.toISOString()),
+        safeCount(
+          supabase
+            .from('calls')
+            .select('id', { count: 'exact', head: true })
+            .gte('data_agendada', now.toISOString())
+            .lte('data_agendada', next48h.toISOString()),
+        ),
       ])
 
     return {
-      csatPending: csatRes.count || 0,
-      missingTranscriptions: transcriptionRes.count || 0,
-      noResponseTags: noResponseRes.count || 0,
-      upcomingCalls: upcomingRes.count || 0,
+      csatPending: csatCount,
+      missingTranscriptions: transcriptionCount,
+      noResponseTags: noResponseCount,
+      upcomingCalls: upcomingCount,
     }
   } catch (error) {
     console.error('Error fetching task lists:', error)

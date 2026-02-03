@@ -13,78 +13,144 @@ import {
   fetchSystemSummary,
   Period,
 } from '@/services/dashboard'
-import { useToast } from '@/hooks/use-toast'
 import { Separator } from '@/components/ui/separator'
 
 export default function Index() {
   const [period, setPeriod] = useState<Period>('30dias')
-  const [loading, setLoading] = useState(true)
-  const [data, setData] = useState<any>({
-    metrics: null,
-    charts: null,
-    tasks: null,
-    criticalClients: [],
-    summary: null,
-  })
-  const { toast } = useToast()
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  // Independent loading states for each section to prevent total page crash
+  const [metrics, setMetrics] = useState<any>(null)
+  const [loadingMetrics, setLoadingMetrics] = useState(true)
+
+  const [charts, setCharts] = useState<any>(null)
+  const [loadingCharts, setLoadingCharts] = useState(true)
+
+  const [tasks, setTasks] = useState<any>(null)
+  const [criticalClients, setCriticalClients] = useState<any[]>([])
+  const [loadingTasks, setLoadingTasks] = useState(true)
+
+  const [summary, setSummary] = useState<any>(null)
+  const [loadingSummary, setLoadingSummary] = useState(true)
+
+  // Load Metrics
+  const loadMetrics = useCallback(async () => {
+    setLoadingMetrics(true)
     try {
-      const [metrics, charts, tasks, criticalClients, summary] =
-        await Promise.all([
-          fetchDashboardMetrics(period),
-          fetchChartsData(),
-          fetchTaskLists(),
-          fetchCriticalClients(),
-          fetchSystemSummary(),
-        ])
-
-      setData({
-        metrics,
-        charts,
-        tasks,
-        criticalClients,
-        summary,
-      })
+      const data = await fetchDashboardMetrics(period)
+      setMetrics(data)
     } catch (error) {
-      console.error('Failed to load dashboard data:', error)
-      toast({
-        title: 'Erro ao carregar dados',
-        description: 'Não foi possível atualizar o dashboard.',
-        variant: 'destructive',
+      console.error('Error loading metrics', error)
+      // Defaults are returned by service on error, but if something else fails:
+      setMetrics({
+        clients: { total: 0, new: 0 },
+        conversations: { total: 0, unread: 0, critical: 0 },
+        calls: { total: 0, thisWeek: 0, next: null },
+        tags: { total: 0, clients: 0, top: [] },
       })
     } finally {
-      setLoading(false)
+      setLoadingMetrics(false)
     }
-  }, [period, toast])
+  }, [period])
+
+  // Load Charts
+  const loadCharts = useCallback(async () => {
+    setLoadingCharts(true)
+    try {
+      const data = await fetchChartsData()
+      setCharts(data)
+    } catch (error) {
+      console.error('Error loading charts', error)
+      setCharts({
+        priority: [],
+        products: [],
+        activity: [],
+        responseTime: [],
+        status: [],
+      })
+    } finally {
+      setLoadingCharts(false)
+    }
+  }, [])
+
+  // Load Tasks
+  const loadTasks = useCallback(async () => {
+    setLoadingTasks(true)
+    try {
+      const [tasksData, criticalData] = await Promise.all([
+        fetchTaskLists(),
+        fetchCriticalClients(),
+      ])
+      setTasks(tasksData)
+      setCriticalClients(criticalData)
+    } catch (error) {
+      console.error('Error loading tasks', error)
+      setTasks({
+        csatPending: 0,
+        missingTranscriptions: 0,
+        noResponseTags: 0,
+        upcomingCalls: 0,
+      })
+      setCriticalClients([])
+    } finally {
+      setLoadingTasks(false)
+    }
+  }, [])
+
+  // Load Summary
+  const loadSummary = useCallback(async () => {
+    setLoadingSummary(true)
+    try {
+      const data = await fetchSystemSummary()
+      setSummary(data)
+    } catch (error) {
+      console.error('Error loading summary', error)
+      setSummary({
+        campaigns: [],
+        ai: { total: 0, used: 0, timeSaved: 0 },
+        templates: [],
+        responseRate: 0,
+      })
+    } finally {
+      setLoadingSummary(false)
+    }
+  }, [])
+
+  // Orchestrate loading
+  const loadAll = useCallback(() => {
+    loadMetrics()
+    loadCharts()
+    loadTasks()
+    loadSummary()
+  }, [loadMetrics, loadCharts, loadTasks, loadSummary])
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    loadAll()
+  }, [loadAll])
 
   return (
     <div className="space-y-8 pb-10 max-w-[1600px] mx-auto">
       <DashboardHeader
         period={period}
         setPeriod={setPeriod}
-        onRefresh={loadData}
-        loading={loading}
+        onRefresh={loadAll}
+        loading={
+          loadingMetrics || loadingCharts || loadingTasks || loadingSummary
+        }
       />
 
-      <MetricCards metrics={data.metrics} loading={loading} />
+      <MetricCards metrics={metrics} loading={loadingMetrics} />
 
-      <ChartsSection data={data.charts} loading={loading} />
+      <ChartsSection data={charts} loading={loadingCharts} />
 
       <div className="grid grid-cols-1 gap-4">
         <TaskAttentionSection
-          tasks={data.tasks}
-          criticalClients={data.criticalClients}
-          loading={loading}
+          tasks={tasks}
+          criticalClients={criticalClients}
+          loading={loadingTasks}
         />
       </div>
 
-      <SystemSummarySection summary={data.summary} loading={loading} />
+      <SystemSummarySection summary={summary} loading={loadingSummary} />
 
       <Separator />
 
