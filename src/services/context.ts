@@ -230,7 +230,9 @@ export const getCompletenessStats = async (): Promise<CompletenessStats> => {
     try {
       const parsed = JSON.parse(newExamplesRaw)
       if (Array.isArray(parsed)) newExamplesCount = parsed.length
-    } catch {}
+    } catch {
+      // Ignore invalid JSON
+    }
   }
 
   const examples = oldExamples.length > 100 || newExamplesCount >= 2
