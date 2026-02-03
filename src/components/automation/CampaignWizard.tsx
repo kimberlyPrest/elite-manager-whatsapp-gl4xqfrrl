@@ -20,12 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { getClients, Client } from '@/services/clients'
 import { filterClients, AutomationModel } from '@/services/automation'
@@ -142,9 +137,10 @@ export function CampaignWizard({
         const name = parts[1]?.trim() || 'Desconhecido'
 
         // Check if client exists
-        const existing = allClients.find(c =>
-          c.telefone.replace(/\D/g, '') === phone ||
-          c.whatsapp_number?.replace(/\D/g, '') === phone
+        const existing = allClients.find(
+          (c) =>
+            c.telefone.replace(/\D/g, '') === phone ||
+            c.whatsapp_number?.replace(/\D/g, '') === phone,
         )
 
         if (existing) return existing
@@ -256,12 +252,18 @@ export function CampaignWizard({
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                 <Tabs
                   value={filters.selectionMethod}
-                  onValueChange={(v) => setFilters({ ...filters, selectionMethod: v as any })}
+                  onValueChange={(v) =>
+                    setFilters({ ...filters, selectionMethod: v as any })
+                  }
                   className="w-full"
                 >
                   <TabsList className="bg-[#1a1a1a] border-[#333] w-full">
-                    <TabsTrigger value="filters" className="flex-1">Por Filtros (Recomendado)</TabsTrigger>
-                    <TabsTrigger value="manual" className="flex-1">Lista Manual / CSV</TabsTrigger>
+                    <TabsTrigger value="filters" className="flex-1">
+                      Por Filtros (Recomendado)
+                    </TabsTrigger>
+                    <TabsTrigger value="manual" className="flex-1">
+                      Lista Manual / CSV
+                    </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="filters" className="space-y-6 mt-4">
@@ -330,10 +332,13 @@ export function CampaignWizard({
                         placeholder="5511999998888,Nome do Cliente&#10;5511988887777,Outro Cliente"
                         className="h-[200px] bg-[#1a1a1a] border-[#333] font-mono text-sm"
                         value={filters.manualList}
-                        onChange={(e) => setFilters({ ...filters, manualList: e.target.value })}
+                        onChange={(e) =>
+                          setFilters({ ...filters, manualList: e.target.value })
+                        }
                       />
                       <p className="text-xs text-gray-500">
-                        Formato: <code>telefone,nome</code> (nome opcional). Aceita CSV simples.
+                        Formato: <code>telefone,nome</code> (nome opcional).
+                        Aceita CSV simples.
                       </p>
                     </div>
                   </TabsContent>
@@ -349,7 +354,9 @@ export function CampaignWizard({
                         {filteredClients.length} destinatários encontrados
                       </p>
                       <p className="text-xs text-gray-400">
-                        {filters.selectionMethod === 'filters' ? 'Baseado nos filtros aplicados' : 'Baseado na lista manual'}
+                        {filters.selectionMethod === 'filters'
+                          ? 'Baseado nos filtros aplicados'
+                          : 'Baseado na lista manual'}
                       </p>
                     </div>
                   </div>
@@ -443,7 +450,9 @@ export function CampaignWizard({
                         <Input
                           type="time"
                           value={timing.startTime}
-                          onChange={(e) => setTiming({ ...timing, startTime: e.target.value })}
+                          onChange={(e) =>
+                            setTiming({ ...timing, startTime: e.target.value })
+                          }
                           className="bg-[#111] border-[#333]"
                         />
                       </div>
@@ -452,7 +461,9 @@ export function CampaignWizard({
                         <Input
                           type="time"
                           value={timing.endTime}
-                          onChange={(e) => setTiming({ ...timing, endTime: e.target.value })}
+                          onChange={(e) =>
+                            setTiming({ ...timing, endTime: e.target.value })
+                          }
                           className="bg-[#111] border-[#333]"
                         />
                       </div>
@@ -483,7 +494,12 @@ export function CampaignWizard({
                         <Input
                           type="number"
                           value={timing.batchSize}
-                          onChange={(e) => setTiming({ ...timing, batchSize: parseInt(e.target.value) })}
+                          onChange={(e) =>
+                            setTiming({
+                              ...timing,
+                              batchSize: parseInt(e.target.value),
+                            })
+                          }
                           className="bg-[#111] border-[#333]"
                         />
                       </div>
@@ -492,7 +508,12 @@ export function CampaignWizard({
                         <Input
                           type="number"
                           value={timing.batchPauseMinutes}
-                          onChange={(e) => setTiming({ ...timing, batchPauseMinutes: parseInt(e.target.value) })}
+                          onChange={(e) =>
+                            setTiming({
+                              ...timing,
+                              batchPauseMinutes: parseInt(e.target.value),
+                            })
+                          }
                           className="bg-[#111] border-[#333]"
                         />
                       </div>

@@ -114,15 +114,20 @@ export function ReviewModal({
         {
           nome: data.basicInfo.name,
           objetivo: data.basicInfo.objective,
-          tipo_selecao: data.filters.selectionMethod === 'manual' ? 'Manual' : 'Filtros',
+          tipo_selecao:
+            data.filters.selectionMethod === 'manual' ? 'Manual' : 'Filtros',
           configuracao_envio: {
             min_interval: data.timing.minInterval,
             max_interval: data.timing.maxInterval,
             business_hours_enabled: data.timing.businessHours,
             start_time: data.timing.startTime,
             end_time: data.timing.endTime,
-            pause_after: data.timing.enableBatchPause ? data.timing.batchSize : undefined,
-            pause_duration: data.timing.enableBatchPause ? data.timing.batchPauseMinutes : undefined,
+            pause_after: data.timing.enableBatchPause
+              ? data.timing.batchSize
+              : undefined,
+            pause_duration: data.timing.enableBatchPause
+              ? data.timing.batchPauseMinutes
+              : undefined,
           },
           variacoes_mensagem: data.messages,
           filtros: data.filters,
@@ -136,7 +141,8 @@ export function ReviewModal({
           nome: modelName,
           descricao: data.basicInfo.description,
           categoria: 'Geral',
-          tipo_selecao: data.filters.selectionMethod === 'manual' ? 'Manual' : 'Filtros',
+          tipo_selecao:
+            data.filters.selectionMethod === 'manual' ? 'Manual' : 'Filtros',
           filtros: data.filters,
           variacoes: data.messages,
           intervalo_min_segundos: data.timing.minInterval,
@@ -157,7 +163,11 @@ export function ReviewModal({
       onConfirm()
     } catch (e: any) {
       console.error(e)
-      toast({ title: 'Erro ao criar campanha', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Erro ao criar campanha',
+        description: e.message,
+        variant: 'destructive',
+      })
     } finally {
       setSubmitting(false)
     }
@@ -221,10 +231,11 @@ export function ReviewModal({
                 {recipients.map((r: any) => (
                   <TableRow
                     key={r.id}
-                    className={`border-[#2a2a2a] hover:bg-[#1a1a1a] transition-colors ${!selectedRecipients.includes(r.id)
+                    className={`border-[#2a2a2a] hover:bg-[#1a1a1a] transition-colors ${
+                      !selectedRecipients.includes(r.id)
                         ? 'opacity-50 grayscale'
                         : ''
-                      }`}
+                    }`}
                   >
                     <TableCell>
                       <Checkbox
@@ -239,7 +250,10 @@ export function ReviewModal({
                       {r.telefone}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="border-[#333] bg-[#222]">
+                      <Badge
+                        variant="outline"
+                        className="border-[#333] bg-[#222]"
+                      >
                         V{r.variationIndex + 1}
                       </Badge>
                     </TableCell>
@@ -306,9 +320,9 @@ export function ReviewModal({
                     ~
                     {Math.ceil(
                       selectedRecipients.length *
-                      ((data.timing.minInterval + data.timing.maxInterval) /
-                        2 /
-                        60),
+                        ((data.timing.minInterval + data.timing.maxInterval) /
+                          2 /
+                          60),
                     )}{' '}
                     min
                   </p>

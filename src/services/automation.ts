@@ -24,12 +24,12 @@ export interface AutomationModel {
 export interface AutomationCampaign {
   id: string
   status_automacao:
-  | 'ativa'
-  | 'pausada'
-  | 'concluida'
-  | 'cancelada'
-  | 'rascunho'
-  | 'aguardando'
+    | 'ativa'
+    | 'pausada'
+    | 'concluida'
+    | 'cancelada'
+    | 'rascunho'
+    | 'aguardando'
   data_inicio: string | null
   total_envios_planejados: number
   total_envios_concluidos: number
@@ -300,7 +300,7 @@ export const createCampaign = async (campaign: any, recipients: any[]) => {
 
   // 2. Create Recipients
   const recipientsPayload = recipients.map((r) => {
-    const isTemp = r.id && r.id.toString().startsWith('temp-');
+    const isTemp = r.id && r.id.toString().startsWith('temp-')
     return {
       automacao_id: automacao.id,
       cliente_id: isTemp ? null : r.id,

@@ -27,9 +27,7 @@ export default function Automation() {
     const fetchCampaigns = () => {
       getCampaigns()
         .then(setCampaigns)
-        .catch(() =>
-          console.error('Erro ao carregar campanhas no background')
-        )
+        .catch(() => console.error('Erro ao carregar campanhas no background'))
     }
 
     fetchCampaigns()
@@ -43,7 +41,7 @@ export default function Automation() {
   // "Poor Man's Cron" - Trigger Queue Processing while Admin is online (every 15s)
   useEffect(() => {
     const queueInterval = setInterval(async () => {
-      const hasActive = campaigns.some(c => c.status_automacao === 'ativa')
+      const hasActive = campaigns.some((c) => c.status_automacao === 'ativa')
       if (hasActive) {
         console.log('Triggering automation queue...')
         await triggerQueueProcessing()
