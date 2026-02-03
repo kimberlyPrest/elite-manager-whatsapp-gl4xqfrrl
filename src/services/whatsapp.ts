@@ -244,24 +244,21 @@ export const checkInstanceConnection = async (config: EvolutionConfig) => {
  */
 export const connectInstance = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
-  try {
-    const response = await fetch(`${url}/instance/connect/${config.instance}`, {
-      method: 'GET',
-      headers: {
-        apikey: config.apikey,
-      },
-    })
 
-    if (!response.ok) {
-      throw new Error(`Failed to connect: ${response.status}`)
-    }
+  const response = await fetch(`${url}/instance/connect/${config.instance}`, {
+    method: 'GET',
+    headers: {
+      apikey: config.apikey,
+    },
+  })
 
-    const data = await response.json()
-    // Evolution API returns base64 or message
-    return data
-  } catch (error) {
-    throw error
+  if (!response.ok) {
+    throw new Error(`Failed to connect: ${response.status}`)
   }
+
+  const data = await response.json()
+  // Evolution API returns base64 or message
+  return data
 }
 
 /**
@@ -269,23 +266,20 @@ export const connectInstance = async (config: EvolutionConfig) => {
  */
 export const logoutInstance = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
-  try {
-    const response = await fetch(`${url}/instance/logout/${config.instance}`, {
-      method: 'DELETE',
-      headers: {
-        apikey: config.apikey,
-      },
-    })
 
-    if (!response.ok) {
-      // 404 means already logged out or instance doesn't exist, which is fine for logout
-      if (response.status !== 404) {
-        throw new Error(`Failed to logout: ${response.status}`)
-      }
+  const response = await fetch(`${url}/instance/logout/${config.instance}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: config.apikey,
+    },
+  })
+
+  if (!response.ok) {
+    // 404 means already logged out or instance doesn't exist, which is fine for logout
+    if (response.status !== 404) {
+      throw new Error(`Failed to logout: ${response.status}`)
     }
-
-    return true
-  } catch (error) {
-    throw error
   }
+
+  return true
 }
