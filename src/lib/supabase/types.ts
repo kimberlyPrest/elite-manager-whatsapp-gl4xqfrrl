@@ -655,7 +655,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_new_client: {
+        Args: { p_client_data: Json; p_products_data: Json }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

@@ -11,6 +11,7 @@ import {
 } from '@/services/clients'
 import { ClientCard } from '@/components/clients/ClientCard'
 import { NewClientModal } from '@/components/clients/NewClientModal'
+import { ImportClientsModal } from '@/components/clients/ImportClientsModal'
 import { useDebounce } from '@/hooks/use-debounce'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
@@ -36,14 +37,12 @@ export default function Clients() {
     setRefreshTrigger((prev) => prev + 1)
   }
 
-  // Fetch Counts once on mount or refresh
   useEffect(() => {
     getClientCounts()
       .then(setCounts)
       .catch((err) => console.error('Failed to fetch counts', err))
   }, [refreshTrigger])
 
-  // Fetch Clients when filter or search changes or refresh
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
@@ -60,7 +59,6 @@ export default function Clients() {
         setLoading(false)
       }
     }
-
     fetchData()
   }, [debouncedSearch, activeFilter, refreshTrigger])
 
@@ -75,7 +73,6 @@ export default function Clients() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto min-h-[calc(100vh-4rem)] flex flex-col">
-      {/* 1. Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-bold text-white tracking-tight">
@@ -86,20 +83,21 @@ export default function Clients() {
           </p>
         </div>
 
-        <NewClientModal
-          onSuccess={handleRefresh}
-          trigger={
-            <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold shadow-lg transition-all">
-              <UserPlus className="mr-2 h-4 w-4" />
-              Novo Cliente
-            </Button>
-          }
-        />
+        <div className="flex gap-2 w-full sm:w-auto">
+          <ImportClientsModal onSuccess={handleRefresh} />
+          <NewClientModal
+            onSuccess={handleRefresh}
+            trigger={
+              <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold shadow-lg transition-all flex-1 sm:flex-none">
+                <UserPlus className="mr-2 h-4 w-4" />
+                Novo Cliente
+              </Button>
+            }
+          />
+        </div>
       </div>
 
-      {/* 2. Search & Filter System */}
       <div className="space-y-4">
-        {/* Search Bar */}
         <div className="relative max-w-xl">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -110,12 +108,10 @@ export default function Clients() {
           />
         </div>
 
-        {/* Horizontal Quick Filter Pills */}
         <div className="flex flex-wrap gap-2 pb-2">
           {filters.map((filter) => {
             const isActive = activeFilter === filter
             const count = counts[filter] || 0
-
             return (
               <button
                 key={filter}
@@ -142,7 +138,6 @@ export default function Clients() {
         </div>
       </div>
 
-      {/* 3. Responsive Client Grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -158,13 +153,6 @@ export default function Clients() {
                 <Skeleton className="h-4 w-40 bg-[#2a2a2a]" />
                 <Skeleton className="h-4 w-48 bg-[#2a2a2a]" />
               </div>
-              <div className="pt-2 flex gap-2">
-                <Skeleton className="h-5 w-16 bg-[#2a2a2a]" />
-                <Skeleton className="h-5 w-16 bg-[#2a2a2a]" />
-              </div>
-              <div className="pt-4 mt-auto">
-                <Skeleton className="h-4 w-full bg-[#2a2a2a]" />
-              </div>
             </div>
           ))}
         </div>
@@ -175,7 +163,6 @@ export default function Clients() {
           ))}
         </div>
       ) : (
-        /* Empty State */
         <div className="flex-1 flex flex-col items-center justify-center text-center py-20 border-2 border-dashed border-[#2a2a2a] rounded-xl bg-[#1a1a1a]/50">
           <div className="h-20 w-20 rounded-full bg-[#2a2a2a] flex items-center justify-center mb-6">
             <Users className="h-10 w-10 text-[#4a4a4a]" />
@@ -184,17 +171,19 @@ export default function Clients() {
             Nenhum cliente encontrado
           </h3>
           <p className="text-muted-foreground max-w-sm mb-8">
-            Não encontramos resultados para sua busca ou filtro. Tente ajustar
-            os termos ou cadastre um novo cliente.
+            Não encontramos resultados para sua busca ou filtro.
           </p>
-          <NewClientModal
-            onSuccess={handleRefresh}
-            trigger={
-              <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold">
-                Cadastrar Primeiro Cliente
-              </Button>
-            }
-          />
+          <div className="flex gap-4">
+            <ImportClientsModal onSuccess={handleRefresh} />
+            <NewClientModal
+              onSuccess={handleRefresh}
+              trigger={
+                <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold">
+                  Cadastrar Manualmente
+                </Button>
+              }
+            />
+          </div>
         </div>
       )}
     </div>
