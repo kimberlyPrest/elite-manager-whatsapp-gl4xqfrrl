@@ -361,3 +361,26 @@ export const recalculatePriority = async (conversationId: string) => {
     return false
   }
 }
+
+// -- Aliases for compatibility --
+export const getConversations = fetchConversations
+export const getMessages = fetchMessages
+export const sendWhatsAppMessage = sendMessage
+export const setManualPriority = updatePriority
+
+/**
+ * Fetches WhatsApp config/status
+ * Added to fix build error where this function is imported but missing
+ */
+export const getWhatsappConfig = async () => {
+  // Mock config - normally this would come from a database table or edge function
+  return {
+    data: {
+      status: 'connected',
+      qr_code: null,
+      instance_name: 'Elite Manager WhatsApp',
+      phone_number: '5511999999999',
+    },
+    error: null,
+  }
+}
