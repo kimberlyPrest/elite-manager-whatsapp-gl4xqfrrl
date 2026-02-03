@@ -378,9 +378,13 @@ export const syncHistory = async (config: EvolutionConfig) => {
     )
 
     if (!response.ok) {
-      // Fallback for some versions that use GET or different path
-      console.warn('POST findMessages failed, trying alternative...')
-      throw new Error(`Falha ao buscar mensagens: ${response.status}`)
+      const errorText = await response.text()
+      try {
+        const errorJson = JSON.parse(errorText)
+        throw new Error(`Erro API: ${errorJson.response?.message || errorJson.message || JSON.stringify(errorJson)}`)
+      } catch (e) {
+        throw new Error(`Falha ao buscar mensagens: ${response.status} - ${errorText}`)
+      }
     }
 
     const data = await response.json()
