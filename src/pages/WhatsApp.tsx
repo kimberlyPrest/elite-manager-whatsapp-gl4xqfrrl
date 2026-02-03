@@ -6,13 +6,20 @@ import {
   getConversations,
   getWhatsappConfig,
   WhatsAppConversation,
+  recalculatePriority,
 } from '@/services/whatsapp'
-import { MessageSquare, AlertTriangle } from 'lucide-react'
+import {
+  MessageSquare,
+  AlertTriangle,
+  ArrowUpDown,
+  Loader2,
+} from 'lucide-react'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from '@/hooks/use-toast'
 import { Link } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
 
 export default function WhatsApp() {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([])
@@ -20,6 +27,9 @@ export default function WhatsApp() {
   const [showProfile, setShowProfile] = useState(false)
   const [loading, setLoading] = useState(true)
   const [configError, setConfigError] = useState(false)
+
+  // New State for Global Actions
+  const [isRecalculating, setIsRecalculating] = useState(false)
 
   const isMobile = useIsMobile()
 
@@ -39,6 +49,19 @@ export default function WhatsApp() {
     }
   }
 
+  const handleGlobalRecalculate = async () => {
+    setIsRecalculating(true)
+    try {
+      await recalculatePriority()
+      toast({ title: 'Prioridades recalculadas com sucesso!' })
+      await loadData()
+    } catch (e) {
+      toast({ title: 'Erro ao recalcular', variant: 'destructive' })
+    } finally {
+      setIsRecalculating(false)
+    }
+  }
+
   useEffect(() => {
     loadData()
 
@@ -48,9 +71,33 @@ export default function WhatsApp() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'conversas_whatsapp' },
-        () => {
-          // Refresh list on any change
+        (payload) => {
+          // Optimistic or full refresh. For priority changes, full refresh is safer to resort list
+          // We debounce or just call loadData (which sets loading true - maybe intrusive)
+          // Better: get updated list silently
           getConversations().then(setConversations)
+
+          // Notification Logic for High Priority
+          if (
+            payload.eventType === 'UPDATE' ||
+            payload.eventType === 'INSERT'
+          ) {
+            const newRec = payload.new as WhatsAppConversation
+            const oldRec = payload.old as WhatsAppConversation | undefined
+
+            if (
+              ['Alto', 'Crítico'].includes(newRec.prioridade) &&
+              oldRec &&
+              !['Alto', 'Crítico'].includes(oldRec.prioridade)
+            ) {
+              toast({
+                title: 'Nova Conversa Prioritária',
+                description: `${newRec.numero_whatsapp} agora é ${newRec.prioridade}`,
+                variant: 'default',
+                className: 'border-l-4 border-l-red-500',
+              })
+            }
+          }
         },
       )
       .subscribe()
@@ -62,18 +109,9 @@ export default function WhatsApp() {
 
   const handleSelectConversation = (id: string) => {
     setSelectedId(id)
-    if (isMobile) {
-      // Logic to handle mobile view navigation could be added here if not using direct layout switching
-    }
   }
 
   const selectedConversation = conversations.find((c) => c.id === selectedId)
-
-  // Layout Logic
-  // Mobile:
-  // - List View: !selectedId
-  // - Chat View: selectedId && !showProfile
-  // - Profile View: selectedId && showProfile
 
   if (configError) {
     return (
@@ -139,14 +177,32 @@ export default function WhatsApp() {
   return (
     <div className="h-[calc(100vh-4rem)] flex overflow-hidden border border-[#2a2a2a] rounded-lg bg-[#0a0a0a]">
       {/* Sidebar */}
-      <div className="w-[320px] shrink-0 border-r border-[#2a2a2a]">
-        <ChatSidebar
-          conversations={conversations}
-          selectedId={selectedId || undefined}
-          onSelect={handleSelectConversation}
-          onRefresh={loadData}
-          loading={loading}
-        />
+      <div className="w-[340px] shrink-0 border-r border-[#2a2a2a] flex flex-col">
+        <div className="bg-[#111111] border-b border-[#2a2a2a] px-2 py-1 flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-[10px] h-6 text-gray-400 hover:text-[#FFD700]"
+            onClick={handleGlobalRecalculate}
+            disabled={isRecalculating}
+          >
+            {isRecalculating ? (
+              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+            ) : (
+              <ArrowUpDown className="h-3 w-3 mr-1" />
+            )}
+            Recalcular Prioridades
+          </Button>
+        </div>
+        <div className="flex-1 min-h-0">
+          <ChatSidebar
+            conversations={conversations}
+            selectedId={selectedId || undefined}
+            onSelect={handleSelectConversation}
+            onRefresh={loadData}
+            loading={loading}
+          />
+        </div>
       </div>
 
       {/* Chat Area */}
@@ -174,7 +230,7 @@ export default function WhatsApp() {
 
       {/* Profile Sidebar */}
       {selectedConversation && showProfile && (
-        <div className="w-[280px] shrink-0 border-l border-[#2a2a2a] animate-in slide-in-from-right duration-300">
+        <div className="w-[300px] shrink-0 border-l border-[#2a2a2a] animate-in slide-in-from-right duration-300">
           <ProfileSidebar
             conversation={selectedConversation}
             onClose={() => setShowProfile(false)}

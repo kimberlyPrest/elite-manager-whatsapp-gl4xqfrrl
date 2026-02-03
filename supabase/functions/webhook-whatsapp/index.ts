@@ -95,6 +95,7 @@ Deno.serve(async (req: Request) => {
             ultima_interacao: now,
             mensagens_nao_lidas: fromMe ? 0 : 1,
             prioridade: 'Médio',
+            score_prioridade: 0,
           })
           .select('id')
           .single()
@@ -114,6 +115,17 @@ Deno.serve(async (req: Request) => {
         message_id: key.id,
       })
 
+      // 4. Trigger Priority Recalculation
+      // We don't await this to avoid blocking the webhook response
+      fetch(`${supabaseUrl}/functions/v1/calcular-prioridade-conversas`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ conversa_id: conversationId }),
+      }).catch((err) => console.error('Failed to trigger priority calc', err))
+
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -122,7 +134,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ status: 'ignored_type' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Webhook Error:', error)
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,

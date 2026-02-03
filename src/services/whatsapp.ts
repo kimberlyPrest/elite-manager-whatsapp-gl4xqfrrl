@@ -9,6 +9,8 @@ export interface WhatsAppConversation {
   ultima_interacao: string | null
   mensagens_nao_lidas: number
   prioridade: 'Crítico' | 'Alto' | 'Médio' | 'Baixo'
+  prioridade_manual?: boolean
+  score_prioridade?: number
   cliente?: {
     id: string
     nome_completo: string
@@ -52,21 +54,18 @@ export const getConversations = async (
   search: string = '',
   filter: string = 'Todas',
 ) => {
-  let query = supabase
-    .from('conversas_whatsapp')
-    .select(
-      `
+  let query = supabase.from('conversas_whatsapp').select(`
       *,
       cliente:clientes(id, nome_completo, primeiro_nome)
-    `,
-    )
-    .order('mensagens_nao_lidas', { ascending: false })
-    .order('ultima_interacao', { ascending: false })
+    `)
+
+  // Base sorting (will be refined in UI for advanced sorting)
+  // Default: Priority then Recent Interaction
+  // Note: Supabase sorting with custom priority order (Crítico > Alto...) is complex in simple query
+  // We'll sort mainly by interaction here and refine in client or use updated score_prioridade if available
+  query = query.order('ultima_interacao', { ascending: false })
 
   if (search) {
-    // Note: Supabase doesn't support easy joining filter on referenced tables in one go without flattened view
-    // We will filter client name in memory for simplicity or use specific search logic
-    // For now, let's filter by number or if possible
     query = query.ilike('numero_whatsapp', `%${search}%`)
   }
 
@@ -81,7 +80,6 @@ export const getConversations = async (
   const { data, error } = await query
   if (error) throw error
 
-  // Client name filtering in memory if search is present
   if (search && data) {
     const lowerSearch = search.toLowerCase()
     return (data as any[]).filter(
@@ -116,7 +114,6 @@ export const sendWhatsAppMessage = async (
     throw new Error('Configuração da API incompleta')
   }
 
-  // 1. Send via Evolution API
   const response = await fetch(
     `${config.url}/message/sendText/${config.instance}`,
     {
@@ -143,7 +140,6 @@ export const sendWhatsAppMessage = async (
     throw new Error('Falha ao enviar mensagem na API')
   }
 
-  // 2. Save to Database (Optimistic or Confirmed)
   const { data, error } = await supabase
     .from('mensagens')
     .insert({
@@ -160,7 +156,6 @@ export const sendWhatsAppMessage = async (
 
   if (error) throw error
 
-  // 3. Update Conversation
   await supabase
     .from('conversas_whatsapp')
     .update({
@@ -170,6 +165,9 @@ export const sendWhatsAppMessage = async (
     })
     .eq('id', conversationId)
 
+  // Trigger priority recalculation asynchronously
+  recalculatePriority(conversationId).catch(console.error)
+
   return data
 }
 
@@ -178,4 +176,30 @@ export const markAsRead = async (conversationId: string) => {
     .from('conversas_whatsapp')
     .update({ mensagens_nao_lidas: 0 })
     .eq('id', conversationId)
+}
+
+export const recalculatePriority = async (conversationId?: string) => {
+  const { data, error } = await supabase.functions.invoke(
+    'calcular-prioridade-conversas',
+    {
+      body: { conversa_id: conversationId },
+    },
+  )
+  if (error) throw error
+  return data
+}
+
+export const setManualPriority = async (
+  conversationId: string,
+  priority: string,
+) => {
+  const { error } = await supabase
+    .from('conversas_whatsapp')
+    .update({
+      prioridade: priority,
+      prioridade_manual: true,
+    })
+    .eq('id', conversationId)
+
+  if (error) throw error
 }
