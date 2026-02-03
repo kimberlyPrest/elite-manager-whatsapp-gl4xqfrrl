@@ -98,8 +98,10 @@ Deno.serve(async (req: Request) => {
         conversationId = existingConv.id
 
         // Only update 'last_message' fields if this message is newer than the one we have
-        const isNewer = !existingConv.ultima_mensagem_timestamp ||
-          new Date(messageDate) > new Date(existingConv.ultima_mensagem_timestamp)
+        const isNewer =
+          !existingConv.ultima_mensagem_timestamp ||
+          new Date(messageDate) >
+            new Date(existingConv.ultima_mensagem_timestamp)
 
         if (isNewer) {
           const newUnread = fromMe
@@ -139,17 +141,20 @@ Deno.serve(async (req: Request) => {
 
       // 3. Insert Message (Use original timestamp)
       // Use ON CONFLICT to avoid duplicate messages during multiple syncs
-      await supabase.from('mensagens').upsert({
-        conversa_id: conversationId,
-        tipo: 'text',
-        conteudo: content,
-        timestamp: messageDate,
-        status_leitura: fromMe ? true : false,
-        origem: fromMe ? 'me' : 'contact',
-        message_id: key.id,
-      }, {
-        onConflict: 'message_id'
-      })
+      await supabase.from('mensagens').upsert(
+        {
+          conversa_id: conversationId,
+          tipo: 'text',
+          conteudo: content,
+          timestamp: messageDate,
+          status_leitura: fromMe ? true : false,
+          origem: fromMe ? 'me' : 'contact',
+          message_id: key.id,
+        },
+        {
+          onConflict: 'message_id',
+        },
+      )
 
       // 4. Trigger Priority Recalculation
       // We don't await this to avoid blocking the webhook response

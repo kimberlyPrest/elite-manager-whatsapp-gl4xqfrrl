@@ -407,7 +407,9 @@ export const syncHistory = async (config: EvolutionConfig) => {
       allMessages = [...allMessages, ...extractRecords(nextData)]
     }
 
-    console.log(`Total messages fetched for sync: ${allMessages.length} (from ${maxPages} pages)`)
+    console.log(
+      `Total messages fetched for sync: ${allMessages.length} (from ${maxPages} pages)`,
+    )
 
     if (allMessages.length === 0) return { count: 0 }
 
