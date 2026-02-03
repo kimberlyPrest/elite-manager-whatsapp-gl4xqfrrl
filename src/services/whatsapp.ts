@@ -33,6 +33,12 @@ export interface WhatsAppMessage {
   url_midia?: string | null
 }
 
+export interface WhatsappConfig {
+  instanceName: string
+  status: 'connected' | 'disconnected' | 'connecting'
+  owner?: string
+}
+
 export const getConversations = async () => {
   const { data, error } = await supabase
     .from('conversas_whatsapp')
@@ -157,4 +163,47 @@ export const markAsRead = async (conversationId: string) => {
     .eq('id', conversationId)
 
   if (error) throw error
+}
+
+// Instance Management Functions
+
+export const getWhatsappConfig = async (): Promise<WhatsappConfig> => {
+  // In a real scenario, this would fetch from a configuration table or edge function
+  return {
+    instanceName: 'Elite Manager WhatsApp',
+    status: 'connected',
+    owner: 'Admin',
+  }
+}
+
+export const checkInstanceConnection = async () => {
+  // Mock connection check
+  return {
+    state: 'open',
+    status: 200,
+  }
+}
+
+export const connectInstance = async () => {
+  // Mock connection initiation
+  return {
+    qrcode: 'mock-qr-code-data',
+    code: '1234-5678',
+  }
+}
+
+export const logoutInstance = async () => {
+  // Mock logout
+  return { success: true }
+}
+
+export const configureWebhook = async (url: string, enabled: boolean) => {
+  // Mock webhook configuration
+  // Could be implemented via supabase.functions.invoke('configure-webhook', { body: { url, enabled } })
+  return { success: true }
+}
+
+export const syncHistory = async () => {
+  // Mock history sync
+  return { success: true }
 }
