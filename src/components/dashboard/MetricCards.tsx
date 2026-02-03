@@ -39,6 +39,17 @@ export function MetricCards({ metrics, loading }: MetricCardsProps) {
     )
   }
 
+  // Safety check to prevent crashes if metrics is null or undefined
+  if (!metrics || !metrics.clients) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="col-span-4 p-4 text-center text-muted-foreground bg-muted/20 rounded-lg">
+          Não foi possível carregar as métricas.
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {/* Total Clients */}

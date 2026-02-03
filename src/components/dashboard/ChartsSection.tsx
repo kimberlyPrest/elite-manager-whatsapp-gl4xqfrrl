@@ -62,6 +62,15 @@ export function ChartsSection({ data, loading }: ChartsSectionProps) {
     )
   }
 
+  // Safety check
+  if (!data || !data.priority) {
+    return (
+      <div className="p-4 text-center text-muted-foreground bg-muted/20 rounded-lg">
+        Não foi possível carregar os gráficos.
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
       {/* 1. Distribuição de Prioridade */}

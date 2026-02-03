@@ -85,25 +85,29 @@ export const getTimelineSummary = async (
   const startOfMonthDate = startOfMonth(now).toISOString()
 
   // We'll run parallel queries for performance
+  // Avoid head: true to prevent JSON parsing errors on empty bodies
   const [totalRes, monthRes, pendingRes, lastRes] = await Promise.all([
     // Total count
     supabase
       .from('timeline_eventos')
-      .select('id', { count: 'exact', head: true })
-      .eq('cliente_id', clientId),
+      .select('id', { count: 'exact' })
+      .eq('cliente_id', clientId)
+      .limit(1),
     // This month count
     supabase
       .from('timeline_eventos')
-      .select('id', { count: 'exact', head: true })
+      .select('id', { count: 'exact' })
       .eq('cliente_id', clientId)
-      .gte('data_evento', startOfMonthDate),
+      .gte('data_evento', startOfMonthDate)
+      .limit(1),
     // Pending Follow-ups
     supabase
       .from('timeline_eventos')
-      .select('id', { count: 'exact', head: true })
+      .select('id', { count: 'exact' })
       .eq('cliente_id', clientId)
       .ilike('tipo_evento', 'fup_%')
-      .eq('resolvido', false),
+      .eq('resolvido', false)
+      .limit(1),
     // Last interaction
     supabase
       .from('timeline_eventos')

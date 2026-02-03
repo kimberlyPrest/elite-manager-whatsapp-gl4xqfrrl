@@ -34,6 +34,15 @@ export function SystemSummarySection({
     )
   }
 
+  // Safety check
+  if (!summary || !summary.campaigns) {
+    return (
+      <div className="p-4 text-center text-muted-foreground bg-muted/20 rounded-lg">
+        Não foi possível carregar o resumo do sistema.
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {/* Campanhas Recentes */}

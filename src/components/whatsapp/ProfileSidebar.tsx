@@ -58,7 +58,13 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
   // Fetch detailed data for score breakdown
   const fetchData = async () => {
     if (conversation.cliente_id) {
-      getClientProducts(conversation.cliente_id).then(setProducts)
+      // Add error handling to prevent runtime crashes
+      getClientProducts(conversation.cliente_id)
+        .then(setProducts)
+        .catch((err) => {
+          console.error('Failed to load client products:', err)
+          setProducts([])
+        })
 
       supabase
         .from('clientes')
@@ -73,6 +79,9 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
             setTags(data.tags_cliente || [])
             setSales(data.vendas || [])
           }
+        })
+        .catch((err) => {
+          console.error('Failed to load client details:', err)
         })
     }
   }

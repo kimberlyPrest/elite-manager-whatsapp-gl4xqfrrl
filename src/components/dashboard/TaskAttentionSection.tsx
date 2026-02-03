@@ -39,6 +39,15 @@ export function TaskAttentionSection({
     )
   }
 
+  // Safety check
+  if (!tasks) {
+    return (
+      <div className="p-4 text-center text-muted-foreground bg-muted/20 rounded-lg">
+        Não foi possível carregar as tarefas.
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Ações Pendentes */}

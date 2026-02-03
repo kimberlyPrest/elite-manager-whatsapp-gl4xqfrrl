@@ -202,12 +202,13 @@ export const realizeCall = async (
 
   if (error) throw error
 
-  // Sync num_calls_realizadas
+  // Sync num_calls_realizadas safely
   const { count } = await supabase
     .from('calls')
-    .select('id', { count: 'exact', head: true })
+    .select('id', { count: 'exact' })
     .eq('produto_cliente_id', productId)
     .not('data_realizada', 'is', null)
+    .limit(1)
 
   await supabase
     .from('produtos_cliente')

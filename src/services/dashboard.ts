@@ -37,11 +37,13 @@ export const getDateRange = (period: Period) => {
   }
 }
 
-// Helper to safely get count with head: true to avoid JSON parsing errors on empty body
-// It specifically handles "Unexpected end of JSON input" errors that can occur with HEAD requests
-const safeCount = async (query: Promise<any>) => {
+// Improved helper to safely get count without using HEAD requests to avoid JSON parsing errors
+// We select 'id' and limit(1) to minimize data transfer while getting the exact count
+const safeCount = async (query: any) => {
   try {
-    const { count, error } = await query
+    // Modify query to avoid HEAD request issues
+    const { count, error } = await query.limit(1)
+
     if (error) {
       console.error('Count query error:', error)
       return 0
@@ -66,18 +68,13 @@ export const fetchDashboardMetrics = async (period: Period) => {
     const startIso = start.toISOString()
     const now = new Date()
 
-    // Execute independent groups of queries in parallel
-    // Using safeCount for HEAD requests to prevent crashes
-
-    // 1. Clients
+    // 1. Clients - using select('id') instead of '*' and avoiding head:true
     const clientsPromise = Promise.all([
-      safeCount(
-        supabase.from('clientes').select('*', { count: 'exact', head: true }),
-      ),
+      safeCount(supabase.from('clientes').select('id', { count: 'exact' })),
       safeCount(
         supabase
           .from('clientes')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact' })
           .gte('created_at', startIso),
       ),
     ])
@@ -88,25 +85,25 @@ export const fetchDashboardMetrics = async (period: Period) => {
       .select('id, prioridade, mensagens_nao_lidas, ultima_interacao')
       .gte('ultima_interacao', subDays(new Date(), 30).toISOString())
 
-    // 3. Calls (Optimized: Count Total, Count Week, Fetch Next)
+    // 3. Calls (Optimized)
     const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
     const callsPromise = Promise.all([
       // Total future calls
       safeCount(
         supabase
           .from('calls')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact' })
           .gte('data_agendada', now.toISOString()),
       ),
       // Calls this week
       safeCount(
         supabase
           .from('calls')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact' })
           .gte('data_agendada', now.toISOString())
           .lte('data_agendada', nextWeek.toISOString()),
       ),
-      // Next call details (Not a count query, so we don't use safeCount)
+      // Next call details
       supabase
         .from('calls')
         .select('id, data_agendada, produto_cliente_id')
@@ -307,7 +304,7 @@ export const fetchTaskLists = async () => {
         safeCount(
           supabase
             .from('calls')
-            .select('id', { count: 'exact', head: true })
+            .select('id', { count: 'exact' })
             .lt('data_realizada', now.toISOString())
             .eq('csat_enviado', false),
         ),
@@ -316,7 +313,7 @@ export const fetchTaskLists = async () => {
         safeCount(
           supabase
             .from('calls')
-            .select('id', { count: 'exact', head: true })
+            .select('id', { count: 'exact' })
             .lt('data_realizada', now.toISOString())
             .is('transcricao', null),
         ),
@@ -325,7 +322,7 @@ export const fetchTaskLists = async () => {
         safeCount(
           supabase
             .from('tags_cliente')
-            .select('id', { count: 'exact', head: true })
+            .select('id', { count: 'exact' })
             .ilike('tipo_tag', 'sem_resposta_%')
             .eq('ativo', true),
         ),
@@ -334,7 +331,7 @@ export const fetchTaskLists = async () => {
         safeCount(
           supabase
             .from('calls')
-            .select('id', { count: 'exact', head: true })
+            .select('id', { count: 'exact' })
             .gte('data_agendada', now.toISOString())
             .lte('data_agendada', next48h.toISOString()),
         ),
