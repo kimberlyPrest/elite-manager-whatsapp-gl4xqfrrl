@@ -4,7 +4,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Plus, LayoutTemplate, History as HistoryIcon, Zap } from 'lucide-react'
 import { AutomationDashboard } from '@/components/automation/AutomationDashboard'
 import { CampaignWizard } from '@/components/automation/CampaignWizard'
-import { getCampaigns, AutomationCampaign } from '@/services/automation'
+import { HistoryTab } from '@/components/automation/HistoryTab'
+import { ModelsTab } from '@/components/automation/ModelsTab'
+import {
+  getCampaigns,
+  AutomationCampaign,
+  AutomationModel,
+} from '@/services/automation'
 import { toast } from '@/hooks/use-toast'
 
 export default function Automation() {
@@ -12,6 +18,9 @@ export default function Automation() {
   const [isWizardOpen, setIsWizardOpen] = useState(false)
   const [campaigns, setCampaigns] = useState<AutomationCampaign[]>([])
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [selectedModel, setSelectedModel] = useState<AutomationModel | null>(
+    null,
+  )
 
   useEffect(() => {
     getCampaigns()
@@ -30,6 +39,11 @@ export default function Automation() {
     setActiveTab('active')
   }
 
+  const handleUseModel = (model: AutomationModel) => {
+    setSelectedModel(model)
+    setIsWizardOpen(true)
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-20">
       <div className="flex flex-col md:flex-row items-start justify-between gap-4">
@@ -42,7 +56,10 @@ export default function Automation() {
           </p>
         </div>
         <Button
-          onClick={() => setIsWizardOpen(true)}
+          onClick={() => {
+            setSelectedModel(null)
+            setIsWizardOpen(true)
+          }}
           className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold shadow-lg shadow-yellow-500/10"
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -90,27 +107,25 @@ export default function Automation() {
           value="history"
           className="animate-fade-in focus-visible:outline-none"
         >
-          <div className="text-center py-20 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl text-gray-500">
-            <HistoryIcon className="h-10 w-10 mx-auto mb-4 opacity-50" />
-            <p>O histórico de campanhas aparecerá aqui.</p>
-          </div>
+          <HistoryTab />
         </TabsContent>
 
         <TabsContent
           value="models"
           className="animate-fade-in focus-visible:outline-none"
         >
-          <div className="text-center py-20 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl text-gray-500">
-            <LayoutTemplate className="h-10 w-10 mx-auto mb-4 opacity-50" />
-            <p>Seus modelos salvos aparecerão aqui.</p>
-          </div>
+          <ModelsTab onUseModel={handleUseModel} />
         </TabsContent>
       </Tabs>
 
       <CampaignWizard
         open={isWizardOpen}
-        onOpenChange={setIsWizardOpen}
+        onOpenChange={(open) => {
+          setIsWizardOpen(open)
+          if (!open) setSelectedModel(null)
+        }}
         onSuccess={handleCampaignCreated}
+        initialModel={selectedModel}
       />
     </div>
   )

@@ -21,32 +21,23 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card } from '@/components/ui/card'
 import { getClients, Client } from '@/services/clients'
-import { filterClients } from '@/services/automation'
-import {
-  Loader2,
-  Users,
-  Wand2,
-  Plus,
-  Clock,
-  Save,
-  ArrowRight,
-  ArrowLeft,
-} from 'lucide-react'
+import { filterClients, AutomationModel } from '@/services/automation'
+import { Users, Plus, ArrowRight, ArrowLeft } from 'lucide-react'
 import { ReviewModal } from './ReviewModal'
 
 interface CampaignWizardProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: () => void
+  initialModel?: AutomationModel | null
 }
 
 export function CampaignWizard({
   open,
   onOpenChange,
   onSuccess,
+  initialModel,
 }: CampaignWizardProps) {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -83,6 +74,30 @@ export function CampaignWizard({
 
   const [showReview, setShowReview] = useState(false)
 
+  // Populate from Model
+  useEffect(() => {
+    if (initialModel && open) {
+      setBasicInfo((prev) => ({
+        ...prev,
+        name: `Campanha: ${initialModel.nome}`,
+        description: initialModel.descricao,
+      }))
+      setMessages(
+        initialModel.variacoes && initialModel.variacoes.length > 0
+          ? initialModel.variacoes
+          : [''],
+      )
+      setFilters((prev) => ({ ...prev, ...initialModel.filtros }))
+      setTiming({
+        minInterval: initialModel.intervalo_min_segundos || 30,
+        maxInterval: initialModel.intervalo_max_segundos || 300,
+        businessHours: initialModel.horario_comercial ?? true,
+        startTime: initialModel.horario_inicio || '09:00',
+        endTime: initialModel.horario_fim || '18:00',
+      })
+    }
+  }, [initialModel, open])
+
   useEffect(() => {
     if (open) {
       setLoading(true)
@@ -92,6 +107,9 @@ export function CampaignWizard({
           setFilteredClients(data)
         })
         .finally(() => setLoading(false))
+    } else {
+      // Reset step on close
+      setStep(1)
     }
   }, [open])
 
@@ -229,6 +247,7 @@ export function CampaignWizard({
                   <div className="flex-1 space-y-4">
                     <Label>Nível de Engajamento</Label>
                     <Select
+                      value={filters.engagement?.[0]}
                       onValueChange={(val) =>
                         setFilters({ ...filters, engagement: [val] })
                       }
@@ -379,7 +398,12 @@ export function CampaignWizard({
           setShowReview(false)
           onOpenChange(false)
           onSuccess()
+          // Increment usage if coming from a model
+          if (initialModel) {
+            // Call increment service here if needed, but safer to do in ReviewModal logic or onSuccess
+          }
         }}
+        initialModelId={initialModel?.id}
       />
     </>
   )
