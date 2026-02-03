@@ -245,20 +245,28 @@ export const checkInstanceConnection = async (config: EvolutionConfig) => {
 export const connectInstance = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
 
-  const response = await fetch(`${url}/instance/connect/${config.instance}`, {
-    method: 'GET',
-    headers: {
-      apikey: config.apikey,
-    },
-  })
+  try {
+    const response = await fetch(`${url}/instance/connect/${config.instance}`, {
+      method: 'GET',
+      headers: {
+        apikey: config.apikey,
+      },
+    })
 
-  if (!response.ok) {
-    throw new Error(`Failed to connect: ${response.status}`)
+    if (!response.ok) {
+      if (response.status === 401) throw new Error('API Key inválida (401)')
+      if (response.status === 404)
+        throw new Error('Instância não encontrada (404)')
+      if (response.status === 403) throw new Error('Acesso negado (403)')
+      throw new Error(`Falha na conexão: ${response.status}`)
+    }
+
+    const data = await response.json()
+    // Evolution API returns base64 or message
+    return data
+  } catch (error: any) {
+    throw new Error(error.message || 'Erro de rede ao conectar')
   }
-
-  const data = await response.json()
-  // Evolution API returns base64 or message
-  return data
 }
 
 /**
@@ -267,19 +275,22 @@ export const connectInstance = async (config: EvolutionConfig) => {
 export const logoutInstance = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
 
-  const response = await fetch(`${url}/instance/logout/${config.instance}`, {
-    method: 'DELETE',
-    headers: {
-      apikey: config.apikey,
-    },
-  })
+  try {
+    const response = await fetch(`${url}/instance/logout/${config.instance}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: config.apikey,
+      },
+    })
 
-  if (!response.ok) {
-    // 404 means already logged out or instance doesn't exist, which is fine for logout
-    if (response.status !== 404) {
-      throw new Error(`Failed to logout: ${response.status}`)
+    if (!response.ok) {
+      if (response.status === 404) return true // Already logged out
+      if (response.status === 401) throw new Error('API Key inválida')
+      throw new Error(`Falha ao desconectar: ${response.status}`)
     }
-  }
 
-  return true
+    return true
+  } catch (error: any) {
+    throw new Error(error.message || 'Erro de rede ao desconectar')
+  }
 }
