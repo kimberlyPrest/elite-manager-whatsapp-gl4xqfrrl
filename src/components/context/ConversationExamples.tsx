@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
-  MessageSquare,
   Search,
   Plus,
   Edit2,
@@ -14,6 +13,7 @@ import {
   Upload,
   Lightbulb,
   MoreVertical,
+  BookOpen,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -29,6 +29,16 @@ import {
 } from '@/services/context'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Agendamento: '#3b82f6',
+  Dúvidas: '#10b981',
+  Objeções: '#f97316',
+  CSAT: '#fbbf24',
+  Suporte: '#6b7280',
+  'Check-in': '#9333ea',
+  Networking: '#ec4899',
+}
 
 export function ConversationExamples({ onUpdate }: { onUpdate: () => void }) {
   const [examples, setExamples] = useState<ConversationExample[]>([])
@@ -160,7 +170,6 @@ export function ConversationExamples({ onUpdate }: { onUpdate: () => void }) {
                   `Deseja importar ${json.length} exemplos? Eles serão adicionados aos atuais.`,
                 )
               ) {
-                // Assign new IDs to avoid conflicts
                 const imported = json.map((ex: any) => ({
                   ...ex,
                   id: crypto.randomUUID(),
@@ -207,7 +216,7 @@ export function ConversationExamples({ onUpdate }: { onUpdate: () => void }) {
     <div className="space-y-6">
       <Card className="bg-yellow-900/10 border-yellow-500/20 shadow-none">
         <CardContent className="flex items-start gap-4 p-4">
-          <div className="bg-yellow-500/10 p-2 rounded-full">
+          <div className="bg-yellow-500/10 p-2 rounded-full hidden md:block">
             <Lightbulb className="w-5 h-5 text-yellow-500" />
           </div>
           <div>
@@ -263,6 +272,15 @@ export function ConversationExamples({ onUpdate }: { onUpdate: () => void }) {
                     selectedCategory === cat &&
                       'bg-yellow-500 text-black border-yellow-500',
                   )}
+                  style={
+                    selectedCategory === cat
+                      ? {
+                          backgroundColor: CATEGORY_COLORS[cat] || '#fbbf24',
+                          color: 'black',
+                          borderColor: 'transparent',
+                        }
+                      : {}
+                  }
                   onClick={() => setSelectedCategory(cat)}
                 >
                   {cat}
@@ -295,7 +313,7 @@ export function ConversationExamples({ onUpdate }: { onUpdate: () => void }) {
               setEditingExample(null)
               setIsModalOpen(true)
             }}
-            className="bg-yellow-500 hover:bg-yellow-600 text-black w-full md:w-auto"
+            className="bg-yellow-500 hover:bg-yellow-600 text-black w-full md:w-auto font-bold"
           >
             <Plus className="w-4 h-4 mr-2" />
             Novo Exemplo
@@ -303,90 +321,121 @@ export function ConversationExamples({ onUpdate }: { onUpdate: () => void }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredExamples.map((example) => (
-          <Card
-            key={example.id}
-            className="bg-[#1a1a1a] border-[#2a2a2a] group hover:border-yellow-500/30 transition-all"
+      {filteredExamples.length === 0 ? (
+        <div className="text-center py-16 border border-[#2a2a2a] rounded-lg bg-[#1a1a1a] flex flex-col items-center">
+          <div className="bg-[#2a2a2a] p-4 rounded-full mb-4">
+            <BookOpen className="w-8 h-8 text-gray-500" />
+          </div>
+          <h3 className="text-lg font-medium text-white mb-2">
+            Nenhum exemplo cadastrado
+          </h3>
+          <p className="text-gray-400 max-w-sm mb-6">
+            Comece adicionando conversas reais ou ideais para treinar a IA com
+            sua metodologia de vendas.
+          </p>
+          <Button
+            onClick={() => {
+              setEditingExample(null)
+              setIsModalOpen(true)
+            }}
+            className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
           >
-            <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between space-y-0">
-              <div className="space-y-1 pr-2">
-                <Badge
-                  variant="outline"
-                  className="text-xs border-yellow-900 text-yellow-500 bg-yellow-900/10 mb-2"
-                >
-                  {example.category}
-                </Badge>
-                <CardTitle
-                  className="text-base text-white line-clamp-1"
-                  title={example.title}
-                >
-                  {example.title}
-                </CardTitle>
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-gray-400 hover:text-white"
-                  >
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="bg-[#1a1a1a] border-[#2a2a2a] text-white"
-                >
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setEditingExample(example)
-                      setIsModalOpen(true)
+            <Plus className="w-4 h-4 mr-2" />
+            Criar Primeiro Exemplo
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredExamples.map((example) => (
+            <Card
+              key={example.id}
+              className="bg-[#1a1a1a] border-[#2a2a2a] group hover:border-yellow-500/30 transition-all flex flex-col h-full"
+            >
+              <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between space-y-0">
+                <div className="space-y-2 pr-2">
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-none text-black"
+                    style={{
+                      backgroundColor:
+                        CATEGORY_COLORS[example.category] || '#fbbf24',
                     }}
                   >
-                    <Edit2 className="w-4 h-4 mr-2" /> Editar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDuplicate(example)}>
-                    <Copy className="w-4 h-4 mr-2" /> Duplicar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-red-500 focus:text-red-500"
-                    onClick={() => handleDelete(example.id)}
+                    {example.category}
+                  </Badge>
+                  <CardTitle
+                    className="text-base text-white line-clamp-1"
+                    title={example.title}
                   >
-                    <Trash2 className="w-4 h-4 mr-2" /> Excluir
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </CardHeader>
-            <CardContent className="p-4 pt-2">
-              <p className="text-xs text-gray-500 mb-3 line-clamp-2 min-h-[2.5em]">
-                {example.context}
-              </p>
-              <div className="bg-[#2a2a2a]/50 p-3 rounded text-xs space-y-2 border border-[#3a3a3a]">
-                <div className="flex gap-2">
-                  <span className="font-bold text-blue-400 shrink-0">
-                    Cliente:
-                  </span>
-                  <span className="text-gray-300 line-clamp-1">
-                    {example.pairs[0]?.client}
-                  </span>
+                    {example.title}
+                  </CardTitle>
                 </div>
-                <div className="flex gap-2">
-                  <span className="font-bold text-green-400 shrink-0">IA:</span>
-                  <span className="text-gray-300 line-clamp-1">
-                    {example.pairs[0]?.ai}
-                  </span>
-                </div>
-                {example.pairs.length > 1 && (
-                  <div className="pt-1 text-[10px] text-gray-500 text-center border-t border-[#3a3a3a] mt-1">
-                    + {example.pairs.length - 1} outros pares de mensagem
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-gray-400 hover:text-white"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="bg-[#1a1a1a] border-[#2a2a2a] text-white"
+                  >
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setEditingExample(example)
+                        setIsModalOpen(true)
+                      }}
+                    >
+                      <Edit2 className="w-4 h-4 mr-2" /> Editar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDuplicate(example)}>
+                      <Copy className="w-4 h-4 mr-2" /> Duplicar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-red-500 focus:text-red-500"
+                      onClick={() => handleDelete(example.id)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardHeader>
+              <CardContent className="p-4 pt-2 flex-1 flex flex-col">
+                <p className="text-xs text-gray-500 mb-3 line-clamp-2 min-h-[2.5em]">
+                  {example.context}
+                </p>
+                <div className="bg-[#2a2a2a]/50 p-3 rounded text-xs space-y-3 border border-[#3a3a3a] mt-auto">
+                  <div className="flex gap-2 border-l-2 border-blue-500 pl-2">
+                    <span className="font-bold text-blue-400 shrink-0">
+                      Cliente:
+                    </span>
+                    <span className="text-gray-300 line-clamp-2">
+                      {example.pairs[0]?.client}
+                    </span>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                  <div className="flex gap-2 border-l-2 border-yellow-500 pl-2">
+                    <span className="font-bold text-yellow-500 shrink-0">
+                      IA:
+                    </span>
+                    <span className="text-gray-300 line-clamp-2">
+                      {example.pairs[0]?.ai}
+                    </span>
+                  </div>
+                  {example.pairs.length > 1 && (
+                    <div className="pt-2 text-[10px] text-gray-500 text-center border-t border-[#3a3a3a] mt-1">
+                      + {example.pairs.length - 1} outros pares de mensagem
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <ExampleModal
         open={isModalOpen}

@@ -18,10 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ConversationExample, MessagePair } from '@/services/context'
 import { Plus, Trash2, ArrowRight, Save, User, Bot } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 interface ExampleModalProps {
   open: boolean
@@ -36,12 +34,12 @@ interface ExampleModalProps {
 
 const CATEGORIES = [
   'Agendamento',
-  'Dúvidas Técnicas',
+  'Dúvidas',
   'Objeções',
-  'Valores/Preço',
+  'CSAT',
   'Suporte',
-  'Follow-up',
-  'Outros',
+  'Check-in',
+  'Networking',
 ]
 
 export function ExampleModal({
@@ -121,7 +119,7 @@ export function ExampleModal({
       <DialogContent className="max-w-2xl bg-[#1a1a1a] border-[#2a2a2a] text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {example ? 'Editar Exemplo' : 'Novo Exemplo de Conversa'}
+            {example ? 'Editar Exemplo' : 'Adicionar Exemplo'}
           </DialogTitle>
           <DialogDescription>
             Passo {step} de 3 -{' '}
@@ -142,16 +140,16 @@ export function ExampleModal({
                   placeholder="Ex: Cliente questionando preço alto"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="bg-[#2a2a2a] border-[#3a3a3a]"
+                  className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
                 />
               </div>
               <div className="space-y-2">
                 <Label>Categoria *</Label>
                 <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="bg-[#2a2a2a] border-[#3a3a3a]">
+                  <SelectTrigger className="bg-[#2a2a2a] border-[#3a3a3a] text-white">
                     <SelectValue placeholder="Selecione uma categoria" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-[#1a1a1a] border-[#2a2a2a] text-white">
                     {CATEGORIES.map((cat) => (
                       <SelectItem key={cat} value={cat}>
                         {cat}
@@ -166,7 +164,7 @@ export function ExampleModal({
                   placeholder="Descreva quem é o cliente, seu momento e sentimento..."
                   value={context}
                   onChange={(e) => setContext(e.target.value)}
-                  className="bg-[#2a2a2a] border-[#3a3a3a] h-24"
+                  className="bg-[#2a2a2a] border-[#3a3a3a] h-24 text-white"
                 />
               </div>
             </div>
@@ -202,29 +200,29 @@ export function ExampleModal({
                   <div className="grid gap-2">
                     <Label className="text-xs text-blue-300 flex items-center gap-1">
                       <User className="w-3 h-3" />
-                      Mensagem do Cliente
+                      Mensagem do Cliente *
                     </Label>
                     <Textarea
                       value={pair.client}
                       onChange={(e) =>
                         handlePairChange(idx, 'client', e.target.value)
                       }
-                      className="bg-[#1a1a1a] border-[#3a3a3a] text-sm h-16"
+                      className="bg-[#1a1a1a] border-[#3a3a3a] text-sm h-16 text-white"
                       placeholder="O que o cliente disse..."
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label className="text-xs text-green-300 flex items-center gap-1">
+                    <Label className="text-xs text-yellow-500 flex items-center gap-1">
                       <Bot className="w-3 h-3" />
-                      Resposta Ideal
+                      Resposta Ideal *
                     </Label>
                     <Textarea
                       value={pair.ai}
                       onChange={(e) =>
                         handlePairChange(idx, 'ai', e.target.value)
                       }
-                      className="bg-[#1a1a1a] border-[#3a3a3a] text-sm h-16"
+                      className="bg-[#1a1a1a] border-[#3a3a3a] text-sm h-16 text-white"
                       placeholder="Como a IA deveria responder..."
                     />
                   </div>
@@ -235,7 +233,7 @@ export function ExampleModal({
                 <Button
                   variant="outline"
                   onClick={handleAddPair}
-                  className="w-full border-dashed border-[#3a3a3a] text-gray-400 hover:text-white hover:bg-[#2a2a2a]"
+                  className="w-full border-dashed border-[#3a3a3a] text-gray-400 hover:text-white hover:bg-[#2a2a2a] bg-transparent"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Adicionar Outro Par de Mensagens
@@ -260,13 +258,13 @@ export function ExampleModal({
                 <div className="space-y-3">
                   {pairs.map((pair, idx) => (
                     <div key={idx} className="space-y-2 text-sm">
-                      <div className="bg-[#1a1a1a] p-2 rounded-lg rounded-tl-none border border-[#3a3a3a] ml-4 text-blue-100">
+                      <div className="bg-[#1a1a1a] p-2 rounded-lg rounded-tl-none border-l-4 border-l-blue-500 border border-[#3a3a3a] ml-4 text-blue-100">
                         <span className="block text-xs text-blue-500 font-bold mb-1">
                           Cliente:
                         </span>
                         {pair.client}
                       </div>
-                      <div className="bg-yellow-900/20 p-2 rounded-lg rounded-tr-none border border-yellow-900/30 mr-4 text-yellow-100 text-right">
+                      <div className="bg-yellow-900/20 p-2 rounded-lg rounded-tr-none border-r-4 border-r-yellow-500 border border-yellow-900/30 mr-4 text-yellow-100 text-right">
                         <span className="block text-xs text-yellow-500 font-bold mb-1">
                           IA:
                         </span>
@@ -285,7 +283,7 @@ export function ExampleModal({
             <Button
               variant="outline"
               onClick={() => setStep(step - 1)}
-              className="border-[#3a3a3a] text-gray-300"
+              className="border-[#3a3a3a] text-gray-300 bg-transparent hover:bg-[#2a2a2a] hover:text-white"
             >
               Voltar
             </Button>
@@ -293,7 +291,7 @@ export function ExampleModal({
             <Button
               variant="ghost"
               onClick={() => onOpenChange(false)}
-              className="text-gray-400"
+              className="text-gray-400 hover:text-white hover:bg-[#2a2a2a]"
             >
               Cancelar
             </Button>
@@ -311,7 +309,7 @@ export function ExampleModal({
           ) : (
             <Button
               onClick={handleSave}
-              className="bg-green-600 text-white hover:bg-green-700"
+              className="bg-green-600 text-white hover:bg-green-700 border-none"
             >
               <Save className="w-4 h-4 mr-2" />
               Salvar Exemplo

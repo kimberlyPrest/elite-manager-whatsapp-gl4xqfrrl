@@ -1,11 +1,5 @@
 import { useState, useEffect } from 'react'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card'
+import { CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -64,10 +58,6 @@ export function ScopeCard({
     return saved ? JSON.parse(saved) : false
   })
 
-  // Debounce auto-save logic handled by parent or manual here?
-  // Spec says: "Auto-save (every 3 seconds of inactivity)".
-  // We will let parent handle saving, but we can track touched/validity here.
-
   useEffect(() => {
     localStorage.setItem(`scope_card_${id}_open`, JSON.stringify(isOpen))
   }, [isOpen, id])
@@ -77,19 +67,23 @@ export function ScopeCard({
   }
 
   // Calculate completeness for color indicator in header
-  const getCompletionColor = () => {
+  const getCompletionStats = () => {
     const fields = Object.values(data)
     const filled = fields.filter((f: any) => {
       if (Array.isArray(f)) return f.length > 0
       return f && f.toString().trim().length > 0
     }).length
     const total = Object.keys(data).length || 1
-    const percentage = (filled / total) * 100
+    const percentage = Math.round((filled / total) * 100)
 
-    if (percentage <= 30) return 'text-red-500'
-    if (percentage <= 70) return 'text-yellow-500'
-    return 'text-green-500'
+    let colorClass = 'text-green-500'
+    if (percentage <= 30) colorClass = 'text-red-500'
+    else if (percentage <= 70) colorClass = 'text-yellow-500'
+
+    return { percentage, colorClass }
   }
+
+  const { percentage, colorClass } = getCompletionStats()
 
   const handleClear = () => {
     if (confirm('Tem certeza que deseja limpar este formulário?')) {
@@ -131,7 +125,7 @@ export function ScopeCard({
     >
       <div className="flex items-center justify-between p-4 border-b border-[#2a2a2a]">
         <div className="flex items-center gap-3">
-          <CollapsibleTrigger className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <CollapsibleTrigger className="flex items-center gap-2 hover:opacity-80 transition-opacity focus:outline-none">
             {isOpen ? (
               <ChevronUp className="w-5 h-5 text-gray-400" />
             ) : (
@@ -160,15 +154,8 @@ export function ScopeCard({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className={cn('text-sm font-bold', getCompletionColor())}>
-            {Math.round(
-              (Object.values(data).filter((v: any) =>
-                Array.isArray(v) ? v.length > 0 : !!v,
-              ).length /
-                (Object.keys(data).length || 1)) *
-                100,
-            )}
-            %
+          <span className={cn('text-sm font-bold', colorClass)}>
+            {percentage}%
           </span>
           <Button
             size="sm"
@@ -177,7 +164,7 @@ export function ScopeCard({
               onSave()
             }}
             disabled={saving}
-            className="bg-[#2a2a2a] hover:bg-[#3a3a3a] text-white border border-[#3a3a3a]"
+            className="bg-yellow-500 hover:bg-yellow-600 text-black border-none font-medium"
           >
             <Save className="w-4 h-4 mr-2" />
             {saving ? 'Salvando...' : 'Salvar'}
@@ -192,110 +179,122 @@ export function ScopeCard({
             {type !== 'venda' && (
               <>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Visão Geral / Descrição *</Label>
+                  <Label className="text-white">Descrição Geral *</Label>
                   <Textarea
                     value={data.description || ''}
                     onChange={(e) =>
                       handleChange('description', e.target.value)
                     }
                     placeholder="Descrição completa do produto..."
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={1500}
                   />
+                  <div className="text-xs text-gray-500 text-right">
+                    Max: 1500 chars
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Público Alvo *</Label>
-                  <Input
+                  <Label className="text-white">Público-Alvo *</Label>
+                  <Textarea
                     value={data.targetAudience || ''}
                     onChange={(e) =>
                       handleChange('targetAudience', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white h-24"
+                    maxLength={800}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Investimento</Label>
-                  <Input
-                    value={data.investment || ''}
-                    onChange={(e) => handleChange('investment', e.target.value)}
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Duração</Label>
+                  <Label className="text-white">Duração Padrão</Label>
                   <Input
                     value={data.duration || ''}
                     onChange={(e) => handleChange('duration', e.target.value)}
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                  />
+                  <Label className="text-white mt-4 block">
+                    Valor de Investimento
+                  </Label>
+                  <Input
+                    value={data.investment || ''}
+                    onChange={(e) => handleChange('investment', e.target.value)}
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white mt-2"
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Metodologia *</Label>
+                  <Label className="text-white">Metodologia Aplicada *</Label>
                   <Textarea
                     value={data.methodology || ''}
                     onChange={(e) =>
                       handleChange('methodology', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a] h-20"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white h-32"
+                    maxLength={2000}
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Estrutura de Calls</Label>
+                  <Label className="text-white">Estrutura das Calls</Label>
                   <Textarea
                     value={data.callStructure || ''}
                     onChange={(e) =>
                       handleChange('callStructure', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a] h-20"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white h-24"
+                    maxLength={1000}
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Entregáveis *</Label>
+                  <Label className="text-white">Principais Entregas *</Label>
                   <Textarea
                     value={data.deliverables || ''}
                     onChange={(e) =>
                       handleChange('deliverables', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a] h-20"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white h-32"
+                    maxLength={2000}
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Resultados Esperados</Label>
+                  <Label className="text-white">Resultados Esperados</Label>
                   <Textarea
                     value={data.expectedResults || ''}
                     onChange={(e) =>
                       handleChange('expectedResults', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a] h-20"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white h-24"
+                    maxLength={1000}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Diferenciais</Label>
+                  <Label className="text-white">Diferenciais do Elite</Label>
                   <Textarea
                     value={data.differentials || ''}
                     onChange={(e) =>
                       handleChange('differentials', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={1000}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Não recomendado para</Label>
+                  <Label className="text-white">Quando NÃO Recomendado</Label>
                   <Textarea
                     value={data.notRecommendedFor || ''}
                     onChange={(e) =>
                       handleChange('notRecommendedFor', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={800}
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Requisitos</Label>
-                  <Input
+                  <Label className="text-white">Pré-requisitos</Label>
+                  <Textarea
                     value={data.requirements || ''}
                     onChange={(e) =>
                       handleChange('requirements', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white h-20"
+                    maxLength={800}
                   />
                 </div>
               </>
@@ -305,38 +304,42 @@ export function ScopeCard({
             {type === 'scale' && (
               <>
                 <div className="space-y-2">
-                  <Label>Diferença do Elite</Label>
+                  <Label className="text-white">Diferença do Elite</Label>
                   <Textarea
                     value={data.differenceFromElite || ''}
                     onChange={(e) =>
                       handleChange('differenceFromElite', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={1000}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Quando Recomendar</Label>
+                  <Label className="text-white">
+                    Quando Recomendar Scale vs Elite
+                  </Label>
                   <Textarea
                     value={data.whenToRecommend || ''}
                     onChange={(e) =>
                       handleChange('whenToRecommend', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={1000}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Número de Calls</Label>
+                <div className="space-y-2 md:col-span-2">
+                  <Label className="text-white">Número de Calls</Label>
                   <Select
-                    value={data.numberOfCalls || 'Flexible'}
+                    value={data.numberOfCalls || 'Flexível'}
                     onValueChange={(v) => handleChange('numberOfCalls', v)}
                   >
-                    <SelectTrigger className="bg-[#2a2a2a] border-[#3a3a3a]">
+                    <SelectTrigger className="bg-[#2a2a2a] border-[#3a3a3a] text-white w-full md:w-1/2">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="6">6 Calls</SelectItem>
-                      <SelectItem value="8">8 Calls</SelectItem>
-                      <SelectItem value="Flexible">Flexível</SelectItem>
+                      <SelectItem value="6 calls">6 calls</SelectItem>
+                      <SelectItem value="8 calls">8 calls</SelectItem>
+                      <SelectItem value="Flexível">Flexível</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -347,33 +350,36 @@ export function ScopeCard({
             {type === 'labs' && (
               <>
                 <div className="space-y-2">
-                  <Label>Modelo de Entrega</Label>
-                  <Input
+                  <Label className="text-white">Modelo de Entrega</Label>
+                  <Textarea
                     value={data.deliveryModel || ''}
                     onChange={(e) =>
                       handleChange('deliveryModel', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={1000}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Tipos de Projeto</Label>
-                  <Input
+                  <Label className="text-white">Tipo de Projeto</Label>
+                  <Textarea
                     value={data.projectTypes || ''}
                     onChange={(e) =>
                       handleChange('projectTypes', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={800}
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Diferenciais Labs</Label>
+                  <Label className="text-white">Diferencial Labs</Label>
                   <Textarea
                     value={data.labsDifferentials || ''}
                     onChange={(e) =>
                       handleChange('labsDifferentials', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={800}
                   />
                 </div>
               </>
@@ -383,38 +389,42 @@ export function ScopeCard({
             {type === 'venda' && (
               <>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Descrição do Processo de Vendas</Label>
+                  <Label className="text-white">
+                    Como Funciona o Processo *
+                  </Label>
                   <Textarea
                     value={data.processDescription || ''}
                     onChange={(e) =>
                       handleChange('processDescription', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a] min-h-[100px]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white min-h-[120px]"
+                    maxLength={2500}
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>
-                    Critérios de Qualificação (Qualificado vs Desqualificado)
+                  <Label className="text-white">
+                    Critérios de Qualificação *
                   </Label>
                   <Textarea
                     value={data.qualificationCriteria || ''}
                     onChange={(e) =>
                       handleChange('qualificationCriteria', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a] min-h-[100px]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white min-h-[120px]"
+                    maxLength={2000}
                   />
                 </div>
 
                 <div className="md:col-span-2 space-y-4">
                   <div className="flex justify-between items-center">
-                    <Label className="text-base">
-                      Objeções Comuns e Respostas
+                    <Label className="text-base text-white">
+                      Objeções Comuns e Respostas *
                     </Label>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleAddObjection}
-                      className="text-xs"
+                      className="text-xs bg-[#2a2a2a] border-[#3a3a3a] text-white hover:bg-[#3a3a3a]"
                     >
                       <Plus className="w-3 h-3 mr-1" />
                       Adicionar Objeção
@@ -449,7 +459,7 @@ export function ScopeCard({
                                   e.target.value,
                                 )
                               }
-                              className="bg-[#1a1a1a] border-[#3a3a3a] text-sm h-20"
+                              className="bg-[#1a1a1a] border-[#3a3a3a] text-sm h-20 text-white"
                               placeholder="Ex: Está caro..."
                             />
                           </div>
@@ -466,7 +476,7 @@ export function ScopeCard({
                                   e.target.value,
                                 )
                               }
-                              className="bg-[#1a1a1a] border-[#3a3a3a] text-sm h-20"
+                              className="bg-[#1a1a1a] border-[#3a3a3a] text-sm h-20 text-white"
                               placeholder="Ex: Entendo, mas considerando o ROI..."
                             />
                           </div>
@@ -482,21 +492,23 @@ export function ScopeCard({
                 </div>
 
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Próximos Passos</Label>
+                  <Label className="text-white">Próximos Passos</Label>
                   <Textarea
                     value={data.nextSteps || ''}
                     onChange={(e) => handleChange('nextSteps', e.target.value)}
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={1000}
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Materiais de Apoio</Label>
+                  <Label className="text-white">Materiais de Apoio</Label>
                   <Textarea
                     value={data.supportMaterials || ''}
                     onChange={(e) =>
                       handleChange('supportMaterials', e.target.value)
                     }
-                    className="bg-[#2a2a2a] border-[#3a3a3a]"
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white"
+                    maxLength={800}
                   />
                 </div>
               </>
@@ -517,7 +529,9 @@ export function ScopeCard({
               disabled={saving}
               className="bg-yellow-500 hover:bg-yellow-600 text-black font-medium"
             >
-              {saving ? 'Salvando...' : 'Salvar'}
+              {saving
+                ? 'Salvando...'
+                : 'Salvar ' + (type === 'venda' ? 'Pipeline' : 'Produto')}
             </Button>
           </div>
         </CardContent>

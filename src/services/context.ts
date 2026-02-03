@@ -44,7 +44,7 @@ export interface ScopeBase {
 export interface ScopeScale extends ScopeBase {
   differenceFromElite: string
   whenToRecommend: string
-  numberOfCalls: '6' | '8' | 'Flexible' | ''
+  numberOfCalls: '6 calls' | '8 calls' | 'Flexível' | ''
 }
 
 export interface ScopeLabs extends ScopeBase {
@@ -208,10 +208,25 @@ export const getCompletenessStats = async (): Promise<CompletenessStats> => {
     contextData?.map((c) => [c.secao, c.conteudo]) || [],
   )
 
+  // Check if any scope is filled (Elite, Scale, Labs)
+  const hasScope = ['escopo_elite', 'escopo_scale', 'escopo_labs'].some(
+    (key) => {
+      const content = contextMap.get(key)
+      if (!content) return false
+      try {
+        const json = JSON.parse(content)
+        return Object.values(json).some((v: any) => v && v.length > 0)
+      } catch {
+        return false
+      }
+    },
+  )
+
   const products =
     (productsCount !== null && productsCount > 0) ||
     (!!contextMap.get('produtos_servicos') &&
-      contextMap.get('produtos_servicos')!.length > 50)
+      contextMap.get('produtos_servicos')!.length > 50) ||
+    hasScope
 
   const institutional =
     !!contextMap.get('institucional') &&

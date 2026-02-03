@@ -3,7 +3,6 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -75,6 +74,66 @@ Deno.serve(async (req) => {
     const contextMap: Record<string, string> = {}
     contextData?.forEach((c: any) => (contextMap[c.secao] = c.conteudo))
 
+    // Parse Scopes
+    let eliteScope, scaleScope, labsScope, salesScope, examples
+    try {
+      eliteScope = JSON.parse(contextMap['escopo_elite'] || '{}')
+    } catch {}
+    try {
+      scaleScope = JSON.parse(contextMap['escopo_scale'] || '{}')
+    } catch {}
+    try {
+      labsScope = JSON.parse(contextMap['escopo_labs'] || '{}')
+    } catch {}
+    try {
+      salesScope = JSON.parse(contextMap['escopo_venda'] || '{}')
+    } catch {}
+    try {
+      examples = JSON.parse(contextMap['exemplos_conversas'] || '[]')
+    } catch {}
+
+    // Determine relevant scope based on client product
+    const clientProducts =
+      conversation.cliente?.produtos_cliente?.map((p: any) =>
+        p.produto.toLowerCase(),
+      ) || []
+    let relevantScopeText = ''
+
+    const formatScope = (name: string, data: any) => {
+      if (!data || Object.keys(data).length === 0) return ''
+      return `\n=== ESCOPO ${name.toUpperCase()} ===
+Descrição: ${data.description}
+Público: ${data.targetAudience}
+Valor: ${data.investment}
+Entregas: ${data.deliverables}
+Metodologia: ${data.methodology}
+${data.objections ? `Objeções Mapeadas: ${data.objections.map((o: any) => `"${o.objection}" -> "${o.response}"`).join(' | ')}` : ''}
+`
+    }
+
+    if (clientProducts.some((p: string) => p.includes('elite'))) {
+      relevantScopeText += formatScope('Adapta Elite', eliteScope)
+    } else if (clientProducts.some((p: string) => p.includes('scale'))) {
+      relevantScopeText += formatScope('Adapta Scale', scaleScope)
+    } else if (clientProducts.some((p: string) => p.includes('labs'))) {
+      relevantScopeText += formatScope('Adapta Labs', labsScope)
+    } else {
+      // If no specific product, or unknown, include summaries or all if not too huge.
+      // For now, let's include all populated scopes as reference
+      relevantScopeText += formatScope('Adapta Elite', eliteScope)
+      relevantScopeText += formatScope('Adapta Scale', scaleScope)
+      relevantScopeText += formatScope('Adapta Labs', labsScope)
+    }
+
+    // Always include Sales Pipeline
+    if (salesScope && salesScope.processDescription) {
+      relevantScopeText += `\n=== PIPELINE DE VENDAS ===
+Processo: ${salesScope.processDescription}
+Qualificação: ${salesScope.qualificationCriteria}
+Objeções Gerais: ${salesScope.objections?.map((o: any) => `"${o.objection}" -> "${o.response}"`).join(' | ')}
+`
+    }
+
     // 4. Fetch Messages
     const { data: messages } = await supabase
       .from('mensagens')
@@ -99,14 +158,9 @@ Deno.serve(async (req) => {
         ?.filter((t: any) => t.ativo)
         .map((t: any) => t.tipo_tag) || []
     const tagsString = activeTags.join(', ') || 'Nenhuma'
-    const lastCall = conversation.cliente?.calls?.[0]?.data_realizada
-      ? `Última call realizada em ${new Date(conversation.cliente.calls[0].data_realizada).toLocaleDateString()}`
-      : 'Sem histórico de calls realizadas'
 
-    // Scenario Logic
+    // Scenario Logic (Scheduled Call, CSAT, New Lead) - Keep existing logic
     const specialInstructions: string[] = []
-
-    // Scenario 1: Scheduled Call in next 48h
     const now = new Date()
     const next48h = new Date(now.getTime() + 48 * 60 * 60 * 1000)
     const scheduledCall = conversation.cliente?.calls?.find((c: any) => {
@@ -127,56 +181,60 @@ Deno.serve(async (req) => {
         },
       )
       specialInstructions.push(
-        `URGENTE: Existe uma call agendada para ${callDate}. Mencione isso na mensagem para confirmar ou lembrar o cliente.`,
+        `URGENTE: Existe uma call agendada para ${callDate}. Mencione isso.`,
       )
     }
-
-    // Scenario 2: CSAT Pending
     if (activeTags.includes('csat_pendente')) {
       specialInstructions.push(
-        'IMPORTANTE: O cliente tem uma pesquisa de satisfação (CSAT) pendente. Peça educadamente o feedback sobre o último atendimento ou call.',
+        'IMPORTANTE: O cliente tem uma pesquisa de satisfação (CSAT) pendente. Peça feedback.',
+      )
+    }
+    if (conversation.cliente?.pendente_classificacao) {
+      specialInstructions.push(
+        'CONTEXTO: Este é um NOVO LEAD (pendente de classificação). Faça perguntas de qualificação.',
       )
     }
 
-    // Scenario 3: New Lead
-    if (conversation.cliente?.pendente_classificacao) {
-      specialInstructions.push(
-        'CONTEXTO: Este é um NOVO LEAD (pendente de classificação). Seja acolhedor, faça perguntas de qualificação sobre o negócio e mostre interesse genuíno para entender a dor principal.',
-      )
+    // Format Few-Shot Examples
+    let examplesText = ''
+    if (Array.isArray(examples) && examples.length > 0) {
+      examplesText =
+        '\n=== EXEMPLOS DE CONVERSAS REAIS (FEW-SHOT) ===\nUse estes exemplos como guia de tom e estrutura:\n'
+      examples.slice(0, 5).forEach((ex: any, i: number) => {
+        if (ex.pairs && ex.pairs.length > 0) {
+          examplesText += `\nCenário ${i + 1}: ${ex.title} (${ex.category})\nContexto: ${ex.context}\n`
+          ex.pairs.forEach((pair: any) => {
+            examplesText += `Cliente: "${pair.client}"\nConsultor: "${pair.ai}"\n`
+          })
+        }
+      })
     }
 
     let systemPrompt = `=== CONTEXTO DA EMPRESA ===
 ${contextMap['institucional'] || ''}
 ${contextMap['produtos_servicos'] || ''}
-${contextMap['escopo_elite'] || ''}
-${contextMap['escopo_scale'] || ''}
+
+${relevantScopeText}
 
 === TOM DE COMUNICAÇÃO ===
 ${contextMap['tom_de_voz'] || 'Profissional, empático, direto e com uso moderado de emojis.'}
+
+${examplesText}
 
 === PERFIL DO CLIENTE ===
 Nome: ${clientName}
 Produtos: ${products}
 Tags: ${tagsString}
-Histórico de Calls: ${lastCall}
 Engajamento: ${conversation.cliente?.nivel_engajamento || 'Desconhecido'}
-Observações: ${conversation.cliente?.observacoes || 'Nenhuma'}
 
 === SUA TAREFA ===
 Você é um consultor humano da empresa. Escreva uma resposta de WhatsApp para este cliente.
 Diretrizes:
 - Use o primeiro nome do cliente de forma natural.
 - Seja objetivo e útil.
-- Evite linguagem robótica ou excessivamente formal (não use "Prezado", "Cordialmente").
+- Baseie-se fortemente nos escopos e exemplos fornecidos.
 - Preferência de tamanho: ${lengthPreference}.
 ${specialInstructions.length > 0 ? '\nINSTRUÇÕES ESPECÍFICAS PARA ESTA CONVERSA:\n' + specialInstructions.map((i) => `- ${i}`).join('\n') : ''}`
-
-    if (templates && templates.length > 0) {
-      systemPrompt += `\n\n=== TEMPLATES DISPONÍVEIS ===\nUse estes templates como inspiração de estilo se fizer sentido, mas adapte ao contexto:\n${templates
-        .slice(0, 3)
-        .map((t: any) => `- ${t.nome}: ${t.conteudo.substring(0, 100)}...`)
-        .join('\n')}`
-    }
 
     const conversationLog = recentMessages
       .map((m: any) => {
@@ -192,25 +250,10 @@ ${specialInstructions.length > 0 ? '\nINSTRUÇÕES ESPECÍFICAS PARA ESTA CONVER
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config['gemini_apikey']}`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: fullPrompt }] }],
-          generationConfig: {
-            temperature: temperature,
-            maxOutputTokens: 800,
-          },
-          safetySettings: [
-            {
-              category: 'HARM_CATEGORY_HARASSMENT',
-              threshold: 'BLOCK_MEDIUM_AND_ABOVE',
-            },
-            {
-              category: 'HARM_CATEGORY_HATE_SPEECH',
-              threshold: 'BLOCK_MEDIUM_AND_ABOVE',
-            },
-          ],
+          generationConfig: { temperature: temperature, maxOutputTokens: 800 },
         }),
       },
     )
@@ -225,15 +268,13 @@ ${specialInstructions.length > 0 ? '\nINSTRUÇÕES ESPECÍFICAS PARA ESTA CONVER
     const aiData = await response.json()
     const suggestion = aiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
 
-    if (!suggestion) {
-      throw new Error('No suggestion generated')
-    }
+    if (!suggestion) throw new Error('No suggestion generated')
 
     const duration = Date.now() - startTime
     const tokens = aiData.usageMetadata?.totalTokenCount || 0
 
     // 7. Log Analytics
-    const { data: analyticsEntry, error: analyticsError } = await supabase
+    const { data: analyticsEntry } = await supabase
       .from('analytics_sugestoes_ia')
       .insert({
         conversa_id: conversa_id,
@@ -245,10 +286,6 @@ ${specialInstructions.length > 0 ? '\nINSTRUÇÕES ESPECÍFICAS PARA ESTA CONVER
       })
       .select()
       .single()
-
-    if (analyticsError) {
-      console.error('Analytics Error:', analyticsError)
-    }
 
     return new Response(
       JSON.stringify({
