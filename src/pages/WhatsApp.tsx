@@ -4,7 +4,7 @@ import { ChatWindow } from '@/components/whatsapp/ChatWindow'
 import { ProfileSidebar } from '@/components/whatsapp/ProfileSidebar'
 import {
   getConversations,
-  getWhatsappConfig,
+  getEvolutionConfig,
   WhatsAppConversation,
   recalculatePriority,
 } from '@/services/whatsapp'
@@ -13,13 +13,14 @@ import {
   AlertTriangle,
   ArrowUpDown,
   Loader2,
+  RefreshCcw,
 } from 'lucide-react'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from '@/hooks/use-toast'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export default function WhatsApp() {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([])
@@ -27,8 +28,6 @@ export default function WhatsApp() {
   const [showProfile, setShowProfile] = useState(false)
   const [loading, setLoading] = useState(true)
   const [configError, setConfigError] = useState(false)
-
-  // New State for Global Actions
   const [isRecalculating, setIsRecalculating] = useState(false)
 
   const isMobile = useIsMobile()
@@ -36,14 +35,20 @@ export default function WhatsApp() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const config = await getWhatsappConfig()
-      if (!config.url || !config.apikey) {
+      const config = await getEvolutionConfig()
+      if (!config.url || !config.apikey || !config.instance) {
         setConfigError(true)
+      } else {
+        setConfigError(false)
       }
+
       const data = await getConversations()
-      setConversations(data)
+      // Ensure data is an array
+      setConversations(Array.isArray(data) ? data : [])
     } catch (e) {
+      console.error(e)
       toast({ title: 'Erro ao carregar conversas', variant: 'destructive' })
+      setConversations([])
     } finally {
       setLoading(false)
     }
@@ -65,19 +70,14 @@ export default function WhatsApp() {
   useEffect(() => {
     loadData()
 
-    // Realtime subscription for conversation list updates
     const channel = supabase
       .channel('public:conversas_whatsapp')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'conversas_whatsapp' },
         (payload) => {
-          // Optimistic or full refresh. For priority changes, full refresh is safer to resort list
-          // We debounce or just call loadData (which sets loading true - maybe intrusive)
-          // Better: get updated list silently
-          getConversations().then(setConversations)
+          getConversations().then((data) => setConversations(data || []))
 
-          // Notification Logic for High Priority
           if (
             payload.eventType === 'UPDATE' ||
             payload.eventType === 'INSERT'
@@ -86,9 +86,9 @@ export default function WhatsApp() {
             const oldRec = payload.old as WhatsAppConversation | undefined
 
             if (
+              newRec &&
               ['Alto', 'Crítico'].includes(newRec.prioridade) &&
-              oldRec &&
-              !['Alto', 'Crítico'].includes(oldRec.prioridade)
+              (!oldRec || !['Alto', 'Crítico'].includes(oldRec.prioridade))
             ) {
               toast({
                 title: 'Nova Conversa Prioritária',
@@ -111,7 +111,27 @@ export default function WhatsApp() {
     setSelectedId(id)
   }
 
-  const selectedConversation = conversations.find((c) => c.id === selectedId)
+  // Safe check for conversations
+  const selectedConversation = Array.isArray(conversations)
+    ? conversations.find((c) => c.id === selectedId)
+    : undefined
+
+  if (loading && conversations.length === 0 && !configError) {
+    return (
+      <div className="h-[calc(100vh-4rem)] flex overflow-hidden border border-[#2a2a2a] rounded-lg bg-[#0a0a0a] p-4">
+        <div className="w-[340px] shrink-0 border-r border-[#2a2a2a] flex flex-col space-y-4">
+          <Skeleton className="h-10 w-full bg-[#1a1a1a]" />
+          <Skeleton className="h-20 w-full bg-[#1a1a1a]" />
+          <Skeleton className="h-20 w-full bg-[#1a1a1a]" />
+          <Skeleton className="h-20 w-full bg-[#1a1a1a]" />
+        </div>
+        <div className="flex-1 p-4 flex flex-col space-y-4">
+          <Skeleton className="h-16 w-full bg-[#1a1a1a]" />
+          <Skeleton className="h-full w-full bg-[#1a1a1a]" />
+        </div>
+      </div>
+    )
+  }
 
   if (configError) {
     return (
@@ -123,12 +143,22 @@ export default function WhatsApp() {
           </h2>
           <p className="text-gray-400">
             A integração com a Evolution API não está configurada corretamente.
+            Configure a instância <strong>org-prestes</strong>.
           </p>
-          <Link to="/settings">
-            <button className="bg-[#FFD700] text-black px-4 py-2 rounded font-semibold hover:bg-[#FFD700]/90 mt-2">
-              Ir para Configurações
-            </button>
-          </Link>
+          <div className="flex gap-2 justify-center">
+            <Button
+              variant="outline"
+              onClick={loadData}
+              className="border-[#333] text-white"
+            >
+              <RefreshCcw className="mr-2 h-4 w-4" /> Tentar Novamente
+            </Button>
+            <Link to="/settings">
+              <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90">
+                Ir para Configurações
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -220,7 +250,7 @@ export default function WhatsApp() {
             <h2 className="text-xl font-semibold text-white mb-2">
               Selecione uma conversa para começar
             </h2>
-            <p className="max-w-xs">
+            <p className="max-w-xs text-sm">
               Escolha um cliente na lista ao lado para visualizar o histórico e
               enviar mensagens.
             </p>

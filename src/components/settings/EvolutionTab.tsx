@@ -34,12 +34,13 @@ import {
   logoutInstance,
   configureWebhook,
   syncHistory,
+  saveEvolutionConfig,
 } from '@/services/whatsapp'
 import { QRCodeDisplay } from './QRCodeDisplay'
 
 interface EvolutionTabProps {
   initialConfig: EvolutionConfig
-  onSave: (config: EvolutionConfig) => Promise<boolean>
+  onSave?: (config: EvolutionConfig) => Promise<boolean> // Made optional
 }
 
 type ConnectionState =
@@ -52,10 +53,14 @@ type ConnectionState =
   | 'not_found'
 
 export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
-  const [config, setConfig] = useState<EvolutionConfig>(initialConfig)
-  const [showKey, setShowKey] = useState(false)
+  // Safe init
+  const [config, setConfig] = useState<EvolutionConfig>({
+    url: initialConfig?.url || '',
+    apikey: initialConfig?.apikey || '',
+    instance: initialConfig?.instance || '',
+  })
 
-  // Connection States
+  const [showKey, setShowKey] = useState(false)
   const [connectionState, setConnectionState] =
     useState<ConnectionState>('unknown')
   const [isChecking, setIsChecking] = useState(false)
@@ -64,17 +69,19 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [isConfiguringWebhook, setIsConfiguringWebhook] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
-
-  // QR Code State
   const [qrCode, setQrCode] = useState<string | null>(null)
-
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    setConfig(initialConfig)
+    if (initialConfig) {
+      setConfig({
+        url: initialConfig.url || '',
+        apikey: initialConfig.apikey || '',
+        instance: initialConfig.instance || '',
+      })
+    }
   }, [initialConfig])
 
-  // Verify connection logic
   const verifyConnection = useCallback(
     async (cfg: EvolutionConfig, silent = true) => {
       if (!cfg.url || !cfg.apikey || !cfg.instance) return
@@ -132,14 +139,12 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
     }
   }
 
-  // Initial check
   useEffect(() => {
-    if (initialConfig.url && initialConfig.instance) {
+    if (initialConfig?.url && initialConfig?.instance) {
       verifyConnection(initialConfig, true)
     }
   }, [initialConfig, verifyConnection])
 
-  // Polling Effect
   useEffect(() => {
     if (qrCode || connectionState === 'connecting') {
       pollingRef.current = setInterval(() => {
@@ -154,7 +159,6 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
     }
   }, [qrCode, connectionState, config, verifyConnection])
 
-  // Watch for connection success to clear QR
   useEffect(() => {
     if (connectionState === 'open' && qrCode) {
       setQrCode(null)
@@ -169,10 +173,22 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      const success = await onSave(config)
-      if (success) {
-        verifyConnection(config, false)
+      // Use internal logic or prop
+      let success = false
+      if (onSave) {
+        success = await onSave(config)
+      } else {
+        success = await saveEvolutionConfig(config)
       }
+
+      if (success) {
+        toast({ title: 'Configurações salvas com sucesso' })
+        verifyConnection(config, false)
+      } else {
+        toast({ title: 'Erro ao salvar configurações', variant: 'destructive' })
+      }
+    } catch (e) {
+      toast({ title: 'Erro ao salvar', variant: 'destructive' })
     } finally {
       setIsSaving(false)
     }
@@ -182,7 +198,7 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
     if (!config.url || !config.instance) return
 
     setIsConnecting(true)
-    setQrCode(null) // Reset old QR
+    setQrCode(null)
 
     try {
       const data = await connectInstance(config)
@@ -201,7 +217,6 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
           description: 'Instância já estava conectada.',
         })
       } else {
-        // Fallback
         setConnectionState('connecting')
         toast({
           title: 'Solicitado',
@@ -261,12 +276,18 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
   }
 
   const handleSyncHistory = async () => {
+    if (
+      !confirm(
+        'Isso pode levar alguns minutos e sincronizará mensagens a partir de 01/09/2025. Continuar?',
+      )
+    )
+      return
     setIsSyncing(true)
     try {
       const result = await syncHistory(config)
       toast({
         title: 'Histórico Sincronizado',
-        description: `${result.count} mensagens antigas foram importadas.`,
+        description: `${result.count} mensagens recentes foram importadas/atualizadas.`,
         className: 'bg-green-500 text-white',
       })
     } catch (e: any) {
@@ -361,7 +382,7 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
               onChange={(e) =>
                 setConfig({ ...config, instance: e.target.value })
               }
-              placeholder="nome-instancia"
+              placeholder="org-prestes"
               className="bg-[#111] border-[#333] text-white focus:border-[#FFD700]"
             />
           </div>
@@ -393,7 +414,6 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
           </div>
         </div>
 
-        {/* Actions Area */}
         <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-[#333] mt-6">
           <Button
             variant="outline"
@@ -439,9 +459,6 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
           )}
         </div>
 
-        {/* Dynamic Content Area */}
-
-        {/* QR Code Display Component */}
         {qrCode && connectionState !== 'open' && (
           <QRCodeDisplay
             qrCode={qrCode}
@@ -450,7 +467,6 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
           />
         )}
 
-        {/* Error Feedback Display */}
         {connectionState === 'error' && !qrCode && (
           <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
@@ -460,8 +476,7 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
               </h4>
               <p className="text-xs text-red-300/80">
                 Não foi possível conectar à instância. Verifique se a URL e a
-                API Key estão corretas. Certifique-se de que a Evolution API
-                está online e acessível.
+                API Key estão corretas.
               </p>
             </div>
           </div>

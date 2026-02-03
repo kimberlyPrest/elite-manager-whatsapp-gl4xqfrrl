@@ -17,10 +17,6 @@ import {
 } from '@/components/ui/tooltip'
 import {
   X,
-  User,
-  Phone,
-  Mail,
-  FileText,
   Tag,
   Check,
   ExternalLink,
@@ -29,6 +25,7 @@ import {
   AlertTriangle,
   Clock,
   Box,
+  FileText,
 } from 'lucide-react'
 import {
   WhatsAppConversation,
@@ -55,10 +52,8 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
   const [savedSuccess, setSavedSuccess] = useState(false)
   const [recalculating, setRecalculating] = useState(false)
 
-  // Fetch detailed data for score breakdown
   const fetchData = async () => {
-    if (conversation.cliente_id) {
-      // Add error handling to prevent runtime crashes
+    if (conversation?.cliente_id) {
       getClientProducts(conversation.cliente_id)
         .then(setProducts)
         .catch((err) => {
@@ -88,10 +83,10 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
 
   useEffect(() => {
     fetchData()
-  }, [conversation.id])
+  }, [conversation?.id])
 
   const handleSaveNotes = async () => {
-    if (!conversation.cliente_id) return
+    if (!conversation?.cliente_id) return
     setSavingNotes(true)
     try {
       await supabase
@@ -108,6 +103,7 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
   }
 
   const handlePriorityChange = async (val: string) => {
+    if (!conversation?.id) return
     try {
       await setManualPriority(conversation.id, val)
       toast({ title: 'Prioridade atualizada manualmente' })
@@ -117,11 +113,11 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
   }
 
   const handleRecalculate = async () => {
+    if (!conversation?.id) return
     setRecalculating(true)
     try {
       await recalculatePriority(conversation.id)
       toast({ title: 'Prioridade recalculada' })
-      // Refresh parent ideally, but for now we rely on realtime subscription in WhatsApp.tsx
     } catch (e) {
       toast({ title: 'Erro', variant: 'destructive' })
     } finally {
@@ -129,20 +125,16 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
     }
   }
 
-  // Calculate breakdown for display (Mirrors Edge Function Logic)
   const breakdown = useMemo(() => {
     const points: { label: string; pts: number; icon: any; color: string }[] =
       []
     let total = 0
 
-    // 1. Time (Estimative - frontend might not have exact last message time sent by us easily without messages prop,
-    // assuming Last Interaction is what triggered it or just displaying generic logic if not precise)
-    // We'll skip Time exact calculation in display to avoid confusion, or use 'ultima_interacao'
     const now = new Date()
-    const lastInter = conversation.ultima_interacao
+    const lastInter = conversation?.ultima_interacao
       ? new Date(conversation.ultima_interacao)
       : null
-    if (lastInter) {
+    if (lastInter && !isNaN(lastInter.getTime())) {
       const diff = Math.floor(
         (now.getTime() - lastInter.getTime()) / (1000 * 60 * 60 * 24),
       )
@@ -158,7 +150,6 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
       }
     }
 
-    // 2. Product
     let prodPts = 0
     let prodName = 'Nenhum'
     products.forEach((p) => {
@@ -180,7 +171,6 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
     })
     total += prodPts
 
-    // 3. Status
     const statusMap: Record<string, number> = {
       Reembolsado: 25,
       'Tempo Esgotado': 25,
@@ -206,15 +196,13 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
       })
     total += statusPts
 
-    // 4. Tags
     let tagPts = 0
     tags
       .filter((t) => t.ativo)
       .forEach((t) => {
-        // Simple approximation
-        if (t.tipo_tag.includes('14_dias') || t.tipo_tag.includes('esgotado'))
+        if (t.tipo_tag?.includes('14_dias') || t.tipo_tag?.includes('esgotado'))
           tagPts += 10
-        else if (t.tipo_tag.includes('7_dias')) tagPts += 7
+        else if (t.tipo_tag?.includes('7_dias')) tagPts += 7
         else tagPts += 5
       })
     tagPts = Math.min(20, tagPts)
@@ -228,7 +216,9 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
     total += tagPts
 
     return points
-  }, [products, tags, sales, conversation.ultima_interacao])
+  }, [products, tags, sales, conversation?.ultima_interacao])
+
+  if (!conversation) return null
 
   const priorityColor =
     conversation.prioridade === 'Crítico'
@@ -256,14 +246,17 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* Identity */}
         <div className="flex flex-col items-center text-center">
           <div className="h-20 w-20 rounded-full bg-[#2a2a2a] flex items-center justify-center mb-3">
-            <img
-              src={`https://img.usecurling.com/ppl/medium?gender=male&seed=${conversation.cliente_id}`}
-              alt="Avatar"
-              className="h-full w-full rounded-full object-cover opacity-80"
-            />
+            {conversation.cliente_id ? (
+              <img
+                src={`https://img.usecurling.com/ppl/medium?gender=male&seed=${conversation.cliente_id}`}
+                alt="Avatar"
+                className="h-full w-full rounded-full object-cover opacity-80"
+              />
+            ) : (
+              <span className="text-2xl text-gray-500">?</span>
+            )}
           </div>
           <h2 className="text-lg font-bold text-white">
             {conversation.cliente?.nome_completo || 'Desconhecido'}
@@ -285,7 +278,6 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
           )}
         </div>
 
-        {/* Priority Section */}
         <div className="bg-[#1a1a1a] rounded-lg p-3 border border-[#2a2a2a] space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -318,7 +310,7 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
           <div className="space-y-1">
             <div className="flex justify-between items-end">
               <span className={cn('text-xl font-bold', priorityColor)}>
-                {conversation.prioridade}
+                {conversation.prioridade ?? 'Baixo'}
               </span>
               <span className="text-2xl font-black text-white">
                 {score}
@@ -386,7 +378,6 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
           </div>
         </div>
 
-        {/* Products */}
         <div className="space-y-3">
           <label className="text-xs font-semibold text-gray-500 uppercase flex items-center gap-2">
             <FileText className="h-3 w-3" /> Produtos Contratados
@@ -422,7 +413,6 @@ export function ProfileSidebar({ conversation, onClose }: ProfileSidebarProps) {
           )}
         </div>
 
-        {/* Notes */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-gray-500 uppercase">

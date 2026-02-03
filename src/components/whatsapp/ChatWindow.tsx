@@ -16,8 +16,9 @@ import { ChatInput } from './ChatInput'
 import { MessageBubble } from './MessageBubble'
 import { SuggestionModal } from './SuggestionModal'
 import { Button } from '@/components/ui/button'
-import { User, MoreVertical, Phone, Loader2 } from 'lucide-react'
+import { User, MoreVertical, Phone } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase/client'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -34,7 +35,6 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
   const [inputText, setInputText] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // AI Suggestion State
   const [suggestionModalOpen, setSuggestionModalOpen] = useState(false)
   const [suggestionLoading, setSuggestionLoading] = useState(false)
   const [suggestionData, setSuggestionData] =
@@ -53,10 +53,10 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
 
   useEffect(() => {
     let mounted = true
-
     const fetch = async () => {
       setLoading(true)
       try {
+        if (!conversation?.id) return
         const data = await getMessages(conversation.id)
         if (mounted) {
           setMessages(data)
@@ -71,7 +71,8 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
 
     fetch()
 
-    // Subscribe to new messages for this conversation
+    if (!conversation?.id) return
+
     const channel = supabase
       .channel(`chat:${conversation.id}`)
       .on(
@@ -93,13 +94,14 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
       mounted = false
       supabase.removeChannel(channel)
     }
-  }, [conversation.id])
+  }, [conversation?.id])
 
   useEffect(() => {
     if (!loading) scrollToBottom()
   }, [messages, loading])
 
   const handleSend = async (text: string) => {
+    if (!conversation?.id) return
     await sendWhatsAppMessage(
       conversation.id,
       conversation.numero_whatsapp,
@@ -108,6 +110,7 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
   }
 
   const handleSuggest = async () => {
+    if (!conversation?.id) return
     if (messages.length === 0) {
       toast({
         title: 'Histórico insuficiente',
@@ -119,7 +122,7 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
     }
 
     setSuggestionLoading(true)
-    setSuggestionModalOpen(true) // Open immediately to show loading state
+    setSuggestionModalOpen(true)
     setSuggestionData(null)
 
     try {
@@ -127,28 +130,11 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
       setSuggestionData(data)
     } catch (error: any) {
       setSuggestionModalOpen(false)
-      if (error.message.includes('API Key not configured')) {
-        toast({
-          title: 'Configuração Necessária',
-          description: 'A chave da API Gemini não está configurada.',
-          variant: 'destructive',
-          action: (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => (window.location.href = '/settings')}
-            >
-              Configurar
-            </Button>
-          ),
-        })
-      } else {
-        toast({
-          title: 'Erro na IA',
-          description: error.message,
-          variant: 'destructive',
-        })
-      }
+      toast({
+        title: 'Erro na IA',
+        description: error.message || 'Falha ao gerar sugestão',
+        variant: 'destructive',
+      })
     } finally {
       setSuggestionLoading(false)
     }
@@ -167,18 +153,19 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
     }
   }
 
+  if (!conversation) return null
+
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a]">
-      {/* Header */}
       <div className="h-16 border-b border-[#2a2a2a] flex items-center justify-between px-4 bg-[#111111]">
         <div
           className="flex items-center gap-3 cursor-pointer"
           onClick={onToggleProfile}
         >
           <div className="h-10 w-10 rounded-full bg-[#FFD700] flex items-center justify-center text-black font-bold text-lg">
-            {conversation.cliente?.nome_completo?.charAt(0) || (
-              <User className="h-5 w-5" />
-            )}
+            {conversation.cliente?.nome_completo?.charAt(0) ??
+              conversation.numero_whatsapp?.slice(0, 2) ??
+              '?'}
           </div>
           <div>
             <h3 className="font-semibold text-white leading-tight">
@@ -211,14 +198,21 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
         </div>
       </div>
 
-      {/* Messages */}
       <ScrollArea
         ref={scrollRef}
         className="flex-1 p-4 bg-[url('https://img.usecurling.com/i?q=subtle-pattern&color=black')] bg-repeat opacity-95"
       >
         {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-[#FFD700]" />
+          <div className="space-y-4 p-4">
+            <div className="flex justify-start">
+              <Skeleton className="h-10 w-[200px] rounded-lg bg-[#1a1a1a]" />
+            </div>
+            <div className="flex justify-end">
+              <Skeleton className="h-16 w-[300px] rounded-lg bg-[#FFD700]/10" />
+            </div>
+            <div className="flex justify-start">
+              <Skeleton className="h-8 w-[150px] rounded-lg bg-[#1a1a1a]" />
+            </div>
           </div>
         ) : (
           <div className="flex flex-col justify-end min-h-full pb-2">
@@ -255,10 +249,9 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
         )}
       </ScrollArea>
 
-      {/* Input */}
       <ChatInput
         onSend={handleSend}
-        disabled={loading}
+        disabled={loading || !conversation?.id}
         onSuggest={handleSuggest}
         suggestionLoading={suggestionLoading}
         inputText={inputText}

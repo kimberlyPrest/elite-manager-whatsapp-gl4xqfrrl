@@ -11,22 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  RefreshCw,
-  Search,
-  MessageSquare,
-  Filter,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react'
+import { RefreshCw, Search, MessageSquare, Filter } from 'lucide-react'
 import { WhatsAppConversation } from '@/services/whatsapp'
 import { cn } from '@/lib/utils'
 import { format, isToday, isYesterday } from 'date-fns'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface ChatSidebarProps {
   conversations: WhatsAppConversation[]
@@ -37,22 +27,29 @@ interface ChatSidebarProps {
 }
 
 export function ChatSidebar({
-  conversations,
+  conversations = [], // Default to empty array
   selectedId,
   onSelect,
   onRefresh,
   loading,
 }: ChatSidebarProps) {
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState('priority') // priority, score, date, name
+  const [sortBy, setSortBy] = useState('priority')
   const [scoreRange, setScoreRange] = useState([0, 100])
   const [showFilters, setShowFilters] = useState(false)
 
   const filteredConversations = useMemo(() => {
+    if (!conversations) return []
+
     let result = conversations.filter((c) => {
+      if (!c) return false
+
+      const phone = c.numero_whatsapp || ''
+      const name = c.cliente?.nome_completo || ''
+
       const matchesSearch =
-        c.numero_whatsapp.includes(search) ||
-        c.cliente?.nome_completo?.toLowerCase().includes(search.toLowerCase())
+        phone.includes(search) ||
+        name.toLowerCase().includes(search.toLowerCase())
       if (!matchesSearch) return false
 
       const score = c.score_prioridade || 0
@@ -61,30 +58,32 @@ export function ChatSidebar({
       return true
     })
 
-    // Sorting logic
     result.sort((a, b) => {
       if (sortBy === 'priority' || sortBy === 'score') {
         const scoreA = a.score_prioridade || 0
         const scoreB = b.score_prioridade || 0
-        if (scoreA !== scoreB) return scoreB - scoreA // Descending Score
+        if (scoreA !== scoreB) return scoreB - scoreA
       }
 
       if (sortBy === 'name') {
-        const nameA = a.cliente?.nome_completo || a.numero_whatsapp
-        const nameB = b.cliente?.nome_completo || b.numero_whatsapp
+        const nameA = a.cliente?.nome_completo || a.numero_whatsapp || ''
+        const nameB = b.cliente?.nome_completo || b.numero_whatsapp || ''
         return nameA.localeCompare(nameB)
       }
 
-      // Default or Secondary Sort: Date
-      const dateA = new Date(a.ultima_interacao || 0).getTime()
-      const dateB = new Date(b.ultima_interacao || 0).getTime()
+      // Safe date parsing
+      const dateA = a.ultima_interacao
+        ? new Date(a.ultima_interacao).getTime()
+        : 0
+      const dateB = b.ultima_interacao
+        ? new Date(b.ultima_interacao).getTime()
+        : 0
       return dateB - dateA
     })
 
     return result
   }, [conversations, search, sortBy, scoreRange])
 
-  // Group by priority if sorted by priority
   const groupedConversations = useMemo(() => {
     if (sortBy !== 'priority') return null
 
@@ -106,13 +105,18 @@ export function ChatSidebar({
 
   const formatTime = (dateStr: string | null) => {
     if (!dateStr) return ''
-    const date = new Date(dateStr)
-    if (isToday(date)) return format(date, 'HH:mm')
-    if (isYesterday(date)) return 'Ontem'
-    return format(date, 'dd/MM/yy')
+    try {
+      const date = new Date(dateStr)
+      if (isNaN(date.getTime())) return ''
+      if (isToday(date)) return format(date, 'HH:mm')
+      if (isYesterday(date)) return 'Ontem'
+      return format(date, 'dd/MM/yy')
+    } catch {
+      return ''
+    }
   }
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority: string | undefined) => {
     switch (priority) {
       case 'Crítico':
         return 'bg-red-500'
@@ -139,9 +143,10 @@ export function ChatSidebar({
       <div className="relative shrink-0">
         <div className="h-10 w-10 rounded-full bg-[#2a2a2a] flex items-center justify-center text-[#FFD700] font-bold">
           {chat.cliente?.nome_completo?.charAt(0) ||
-            chat.numero_whatsapp.slice(0, 2)}
+            chat.numero_whatsapp?.slice(0, 2) ||
+            '?'}
         </div>
-        {chat.mensagens_nao_lidas > 0 && (
+        {(chat.mensagens_nao_lidas ?? 0) > 0 && (
           <span className="absolute -top-1 -right-1 h-5 w-5 bg-[#FFD700] text-black text-[10px] font-bold rounded-full flex items-center justify-center">
             {chat.mensagens_nao_lidas}
           </span>
@@ -151,15 +156,15 @@ export function ChatSidebar({
       <div className="flex-1 min-w-0 overflow-hidden">
         <div className="flex items-center justify-between mb-1">
           <span className="font-medium text-white truncate text-sm">
-            {chat.cliente?.nome_completo || chat.numero_whatsapp}
+            {chat.cliente?.nome_completo || chat.numero_whatsapp || 'Sem nome'}
           </span>
           <span className="text-[10px] text-gray-500 whitespace-nowrap">
             {formatTime(chat.ultima_interacao)}
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <p className="text-xs text-gray-400 truncate max-w-[80%]">
-            {chat.ultima_mensagem}
+          <p className="text-xs text-gray-400 truncate max-w-[80%] min-h-[1.5em]">
+            {chat.ultima_mensagem || ''}
           </p>
           <div className="flex items-center gap-1">
             <span
@@ -190,14 +195,17 @@ export function ChatSidebar({
 
   return (
     <div className="flex flex-col h-full bg-[#111111]">
-      {/* Header */}
       <div className="p-4 border-b border-[#2a2a2a] space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-white text-lg flex items-center gap-2">
             Conversas
-            <Badge variant="secondary" className="bg-[#2a2a2a] text-gray-300">
-              {filteredConversations.length}
-            </Badge>
+            {loading ? (
+              <Skeleton className="h-5 w-8 bg-[#2a2a2a] rounded-full" />
+            ) : (
+              <Badge variant="secondary" className="bg-[#2a2a2a] text-gray-300">
+                {filteredConversations.length}
+              </Badge>
+            )}
           </h2>
           <div className="flex gap-1">
             <Button
@@ -233,7 +241,6 @@ export function ChatSidebar({
           />
         </div>
 
-        {/* Filters */}
         <Collapsible open={showFilters} onOpenChange={setShowFilters}>
           <CollapsibleContent className="space-y-3 pt-2">
             <div className="space-y-1">
@@ -270,10 +277,19 @@ export function ChatSidebar({
         </Collapsible>
       </div>
 
-      {/* List */}
       <ScrollArea className="flex-1">
         <div className="flex flex-col pb-2">
-          {filteredConversations.length === 0 ? (
+          {loading && conversations.length === 0 ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="p-4 border-b border-[#1a1a1a] flex gap-3">
+                <Skeleton className="h-10 w-10 rounded-full bg-[#1a1a1a]" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-24 bg-[#1a1a1a]" />
+                  <Skeleton className="h-3 w-full bg-[#1a1a1a]" />
+                </div>
+              </div>
+            ))
+          ) : filteredConversations.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-20" />
               <p className="text-sm">Nenhuma conversa encontrada</p>
