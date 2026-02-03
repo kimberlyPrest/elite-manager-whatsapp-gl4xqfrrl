@@ -31,6 +31,30 @@ export type ClientFilter =
   | 'Venda'
   | 'Pendente'
 
+export interface NewClientPayload {
+  nome_completo: string
+  primeiro_nome: string
+  sobrenome: string
+  telefone: string
+  whatsapp_number: string
+  email: string
+  segmento: string
+  nivel_engajamento: string
+  dor_principal: string
+  observacoes: string
+  potencial_upsell: boolean
+  pendente_classificacao: boolean
+}
+
+export interface NewProductPayload {
+  produto: string
+  status: string
+  num_calls_total: number | null
+  data_inicio: string
+  data_fim_prevista: string
+  observacoes_produto: string
+}
+
 export const getClients = async (
   search: string = '',
   filter: ClientFilter = 'Todos',
@@ -62,10 +86,6 @@ export const getClients = async (
   if (filter === 'Pendente') {
     query = query.eq('pendente_classificacao', true)
   }
-
-  // Note: For product filters (Elite, Scale, etc), we are fetching all clients and filtering in memory
-  // to simpler handle the nested array requirement and display all products for a client even if filtered by one.
-  // In a large production app, this should be done via complex Postgrest filters or RPC.
 
   const { data, error } = await query
 
@@ -121,4 +141,17 @@ export const getClientCounts = async () => {
     Labs: labs,
     Venda: venda,
   }
+}
+
+export const createClient = async (
+  clientData: NewClientPayload,
+  productsData: NewProductPayload[],
+) => {
+  const { data, error } = await supabase.rpc('create_new_client', {
+    p_client_data: clientData as any, // Cast to any to avoid strict JSONB type mismatch with client
+    p_products_data: productsData as any,
+  })
+
+  if (error) throw error
+  return data
 }

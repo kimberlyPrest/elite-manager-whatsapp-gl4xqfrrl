@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search, UserPlus, Users } from 'lucide-react'
 import {
@@ -11,6 +10,7 @@ import {
   ClientFilter,
 } from '@/services/clients'
 import { ClientCard } from '@/components/clients/ClientCard'
+import { NewClientModal } from '@/components/clients/NewClientModal'
 import { useDebounce } from '@/hooks/use-debounce'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
@@ -30,15 +30,20 @@ export default function Clients() {
   })
 
   const debouncedSearch = useDebounce(searchTerm, 300)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
-  // Fetch Counts once on mount
+  const handleRefresh = () => {
+    setRefreshTrigger((prev) => prev + 1)
+  }
+
+  // Fetch Counts once on mount or refresh
   useEffect(() => {
     getClientCounts()
       .then(setCounts)
       .catch((err) => console.error('Failed to fetch counts', err))
-  }, [])
+  }, [refreshTrigger])
 
-  // Fetch Clients when filter or search changes
+  // Fetch Clients when filter or search changes or refresh
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
@@ -57,7 +62,7 @@ export default function Clients() {
     }
 
     fetchData()
-  }, [debouncedSearch, activeFilter])
+  }, [debouncedSearch, activeFilter, refreshTrigger])
 
   const filters: ClientFilter[] = [
     'Todos',
@@ -80,10 +85,16 @@ export default function Clients() {
             {counts['Todos']} clientes cadastrados
           </p>
         </div>
-        <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold shadow-lg transition-all">
-          <UserPlus className="mr-2 h-4 w-4" />
-          Novo Cliente
-        </Button>
+
+        <NewClientModal
+          onSuccess={handleRefresh}
+          trigger={
+            <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold shadow-lg transition-all">
+              <UserPlus className="mr-2 h-4 w-4" />
+              Novo Cliente
+            </Button>
+          }
+        />
       </div>
 
       {/* 2. Search & Filter System */}
@@ -176,9 +187,14 @@ export default function Clients() {
             Não encontramos resultados para sua busca ou filtro. Tente ajustar
             os termos ou cadastre um novo cliente.
           </p>
-          <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold">
-            Cadastrar Primeiro Cliente
-          </Button>
+          <NewClientModal
+            onSuccess={handleRefresh}
+            trigger={
+              <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold">
+                Cadastrar Primeiro Cliente
+              </Button>
+            }
+          />
         </div>
       )}
     </div>
