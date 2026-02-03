@@ -1,252 +1,186 @@
-import { useState } from 'react'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, Filter, MoreHorizontal } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Search, UserPlus, Users } from 'lucide-react'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+  getClients,
+  getClientCounts,
+  Client,
+  ClientFilter,
+} from '@/services/clients'
+import { ClientCard } from '@/components/clients/ClientCard'
+import { useDebounce } from '@/hooks/use-debounce'
+import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
-type Client = {
-  id: string
-  name: string
-  phone: string
-  status: 'Ativo' | 'Arquivado' | 'Aguardando'
-  lastInteraction: string
-  plan: string
-}
-
-const initialClients: Client[] = [
-  {
-    id: '1',
-    name: 'João Silva',
-    phone: '+55 11 99999-0001',
-    status: 'Ativo',
-    lastInteraction: '10/05/2024',
-    plan: 'Premium',
-  },
-  {
-    id: '2',
-    name: 'Maria Souza',
-    phone: '+55 11 99999-0002',
-    status: 'Aguardando',
-    lastInteraction: '08/05/2024',
-    plan: 'Standard',
-  },
-  {
-    id: '3',
-    name: 'Carlos Oliveira',
-    phone: '+55 11 99999-0003',
-    status: 'Arquivado',
-    lastInteraction: '01/04/2024',
-    plan: 'Basic',
-  },
-  {
-    id: '4',
-    name: 'Fernanda Lima',
-    phone: '+55 11 99999-0004',
-    status: 'Ativo',
-    lastInteraction: '12/05/2024',
-    plan: 'Premium',
-  },
-  {
-    id: '5',
-    name: 'Roberto Santos',
-    phone: '+55 11 99999-0005',
-    status: 'Ativo',
-    lastInteraction: '11/05/2024',
-    plan: 'Standard',
-  },
-]
-
 export default function Clients() {
-  const [clients] = useState<Client[]>(initialClients)
+  const [clients, setClients] = useState<Client[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeFilter, setActiveFilter] = useState<ClientFilter>('Todos')
+  const [counts, setCounts] = useState<Record<string, number>>({
+    Todos: 0,
+    Elite: 0,
+    Scale: 0,
+    Labs: 0,
+    Venda: 0,
+    Pendente: 0,
+  })
 
-  const filteredClients = clients.filter(
-    (client) =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.phone.includes(searchTerm),
-  )
+  const debouncedSearch = useDebounce(searchTerm, 300)
 
-  const handleAddClient = () => {
-    toast({
-      title: 'Funcionalidade em desenvolvimento',
-      description: 'A criação de clientes será implementada na próxima versão.',
-      className: 'border-primary text-foreground bg-background',
-    })
-  }
+  // Fetch Counts once on mount
+  useEffect(() => {
+    getClientCounts()
+      .then(setCounts)
+      .catch((err) => console.error('Failed to fetch counts', err))
+  }, [])
 
-  const getStatusColor = (status: Client['status']) => {
-    switch (status) {
-      case 'Ativo':
-        return 'bg-green-500/20 text-green-500 hover:bg-green-500/30'
-      case 'Aguardando':
-        return 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'
-      case 'Arquivado':
-        return 'bg-gray-500/20 text-gray-400 hover:bg-gray-500/30'
-      default:
-        return 'bg-secondary'
+  // Fetch Clients when filter or search changes
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true)
+      try {
+        const data = await getClients(debouncedSearch, activeFilter)
+        setClients(data)
+      } catch (error) {
+        toast({
+          title: 'Erro ao carregar clientes',
+          description: 'Não foi possível buscar os dados. Tente novamente.',
+          variant: 'destructive',
+        })
+      } finally {
+        setLoading(false)
+      }
     }
-  }
+
+    fetchData()
+  }, [debouncedSearch, activeFilter])
+
+  const filters: ClientFilter[] = [
+    'Todos',
+    'Elite',
+    'Scale',
+    'Labs',
+    'Venda',
+    'Pendente',
+  ]
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6 max-w-[1600px] mx-auto min-h-[calc(100vh-4rem)] flex flex-col">
+      {/* 1. Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">
-            Gestão de Clientes
+          <h1 className="text-[28px] font-bold text-white tracking-tight">
+            Clientes
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Gerencie sua base de contatos e status de consultoria
+          <p className="text-muted-foreground mt-1 text-sm">
+            {counts['Todos']} clientes cadastrados
           </p>
         </div>
-        <Button
-          onClick={handleAddClient}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Adicionar Cliente
+        <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold shadow-lg transition-all">
+          <UserPlus className="mr-2 h-4 w-4" />
+          Novo Cliente
         </Button>
       </div>
 
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row items-center gap-4 justify-between">
-            <CardTitle>Base de Clientes</CardTitle>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Buscar por nome ou telefone..."
-                  className="pl-9 bg-background border-border focus-visible:ring-primary"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="icon"
-                className="shrink-0 border-border text-foreground hover:bg-secondary"
-              >
-                <Filter className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border border-border">
-            <Table>
-              <TableHeader className="bg-secondary/50">
-                <TableRow className="hover:bg-transparent border-border">
-                  <TableHead className="text-muted-foreground">Nome</TableHead>
-                  <TableHead className="text-muted-foreground">
-                    Telefone
-                  </TableHead>
-                  <TableHead className="text-muted-foreground">
-                    Status
-                  </TableHead>
-                  <TableHead className="text-muted-foreground">Plano</TableHead>
-                  <TableHead className="text-muted-foreground">
-                    Última Interação
-                  </TableHead>
-                  <TableHead className="text-right text-muted-foreground">
-                    Ações
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredClients.length > 0 ? (
-                  filteredClients.map((client) => (
-                    <TableRow
-                      key={client.id}
-                      className="border-border hover:bg-secondary/30"
-                    >
-                      <TableCell className="font-medium text-foreground">
-                        {client.name}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {client.phone}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(client.status)}>
-                          {client.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-foreground">
-                        {client.plan}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {client.lastInteraction}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
-                            >
-                              <span className="sr-only">Abrir menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            className="bg-popover border-border text-popover-foreground"
-                          >
-                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                            <DropdownMenuItem className="focus:bg-secondary focus:text-primary">
-                              Ver Detalhes
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="focus:bg-secondary focus:text-primary">
-                              Editar Cliente
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator className="bg-border" />
-                            <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">
-                              Arquivar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="h-24 text-center text-muted-foreground"
-                    >
-                      Nenhum cliente encontrado.
-                    </TableCell>
-                  </TableRow>
+      {/* 2. Search & Filter System */}
+      <div className="space-y-4">
+        {/* Search Bar */}
+        <div className="relative max-w-xl">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome, telefone ou e-mail..."
+            className="pl-10 h-11 bg-[#1a1a1a] border-[#3a3a3a] text-white focus:ring-[#FFD700]/50 focus:border-[#FFD700]"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        {/* Horizontal Quick Filter Pills */}
+        <div className="flex flex-wrap gap-2 pb-2">
+          {filters.map((filter) => {
+            const isActive = activeFilter === filter
+            const count = counts[filter] || 0
+
+            return (
+              <button
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border',
+                  isActive
+                    ? 'bg-[#FFD700]/20 border-[#FFD700] text-[#FFD700]'
+                    : 'bg-transparent border-[#3a3a3a] text-gray-400 hover:border-gray-500 hover:text-white',
                 )}
-              </TableBody>
-            </Table>
+              >
+                {filter === 'Pendente' ? 'Pendente Classificação' : filter}
+                <span
+                  className={cn(
+                    'text-xs ml-0.5',
+                    isActive ? 'text-[#FFD700]/80' : 'text-gray-600',
+                  )}
+                >
+                  ({count})
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 3. Responsive Client Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 space-y-4 h-[220px]"
+            >
+              <div className="flex justify-between">
+                <Skeleton className="h-5 w-32 bg-[#2a2a2a]" />
+                <Skeleton className="h-5 w-16 bg-[#2a2a2a]" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-40 bg-[#2a2a2a]" />
+                <Skeleton className="h-4 w-48 bg-[#2a2a2a]" />
+              </div>
+              <div className="pt-2 flex gap-2">
+                <Skeleton className="h-5 w-16 bg-[#2a2a2a]" />
+                <Skeleton className="h-5 w-16 bg-[#2a2a2a]" />
+              </div>
+              <div className="pt-4 mt-auto">
+                <Skeleton className="h-4 w-full bg-[#2a2a2a]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : clients.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 animate-fade-in">
+          {clients.map((client) => (
+            <ClientCard key={client.id} client={client} />
+          ))}
+        </div>
+      ) : (
+        /* Empty State */
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-20 border-2 border-dashed border-[#2a2a2a] rounded-xl bg-[#1a1a1a]/50">
+          <div className="h-20 w-20 rounded-full bg-[#2a2a2a] flex items-center justify-center mb-6">
+            <Users className="h-10 w-10 text-[#4a4a4a]" />
           </div>
-        </CardContent>
-      </Card>
+          <h3 className="text-xl font-bold text-white mb-2">
+            Nenhum cliente encontrado
+          </h3>
+          <p className="text-muted-foreground max-w-sm mb-8">
+            Não encontramos resultados para sua busca ou filtro. Tente ajustar
+            os termos ou cadastre um novo cliente.
+          </p>
+          <Button className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold">
+            Cadastrar Primeiro Cliente
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

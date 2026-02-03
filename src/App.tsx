@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Index from './pages/Index'
 import WhatsApp from './pages/WhatsApp'
 import Clients from './pages/Clients'
+import ClientProfile from './pages/ClientProfile'
 import Automation from './pages/Automation'
 import Context from './pages/Context'
 import Settings from './pages/Settings'
@@ -23,6 +24,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/whatsapp" element={<WhatsApp />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="/clients/:id" element={<ClientProfile />} />
           <Route path="/automation" element={<Automation />} />
           <Route path="/context" element={<Context />} />
           <Route path="/settings" element={<Settings />} />
