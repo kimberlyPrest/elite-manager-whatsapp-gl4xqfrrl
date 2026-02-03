@@ -30,7 +30,9 @@ Deno.serve(async (req: Request) => {
 
       // If data contains an array of messages (Standard Evolution v2), process the first one
       // This makes the function compatible with both single-message syncs and real-time arrays
-      const msg = Array.isArray(messageData.messages) ? messageData.messages[0] : messageData
+      const msg = Array.isArray(messageData.messages)
+        ? messageData.messages[0]
+        : messageData
 
       if (!msg || !msg.key) {
         console.warn('Ignoring message without key/data')

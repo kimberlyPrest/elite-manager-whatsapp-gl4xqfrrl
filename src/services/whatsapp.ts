@@ -437,7 +437,10 @@ export const syncHistory = async (config: EvolutionConfig) => {
 
             if (!response.ok) {
               const errorText = await response.text()
-              console.error(`Webhook sync error for message ${msg.key?.id}:`, errorText)
+              console.error(
+                `Webhook sync error for message ${msg.key?.id}:`,
+                errorText,
+              )
             } else {
               syncedCount++
             }
