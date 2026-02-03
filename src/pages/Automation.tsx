@@ -1,145 +1,117 @@
-import { useState } from 'react'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Switch } from '@/components/ui/switch'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Plus, Zap, MessageSquare, Clock, ArrowRight } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Plus, LayoutTemplate, History as HistoryIcon, Zap } from 'lucide-react'
+import { AutomationDashboard } from '@/components/automation/AutomationDashboard'
+import { CampaignWizard } from '@/components/automation/CampaignWizard'
+import { getCampaigns, AutomationCampaign } from '@/services/automation'
 import { toast } from '@/hooks/use-toast'
 
-type AutomationRule = {
-  id: string
-  name: string
-  description: string
-  active: boolean
-  trigger: string
-}
-
 export default function Automation() {
-  const [rules, setRules] = useState<AutomationRule[]>([
-    {
-      id: '1',
-      name: 'Mensagem de Boas-vindas',
-      description: 'Envia mensagem automática para novos leads.',
-      active: true,
-      trigger: 'Novo Contato',
-    },
-    {
-      id: '2',
-      name: 'Resposta Ausente',
-      description: 'Responde automaticamente fora do horário comercial.',
-      active: false,
-      trigger: 'Horário',
-    },
-    {
-      id: '3',
-      name: 'Follow-up de 24h',
-      description: 'Envia lembrete após 24h sem resposta.',
-      active: true,
-      trigger: 'Sem Resposta',
-    },
-    {
-      id: '4',
-      name: 'Qualificação Automática',
-      description: 'Envia formulário inicial para novos clientes.',
-      active: false,
-      trigger: 'Tag: Lead',
-    },
-  ])
+  const [activeTab, setActiveTab] = useState('active')
+  const [isWizardOpen, setIsWizardOpen] = useState(false)
+  const [campaigns, setCampaigns] = useState<AutomationCampaign[]>([])
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
-  const toggleRule = (id: string) => {
-    setRules(
-      rules.map((rule) => {
-        if (rule.id === id) {
-          const newState = !rule.active
-          toast({
-            title: newState ? 'Automação Ativada' : 'Automação Desativada',
-            description: `A regra "${rule.name}" foi ${newState ? 'ativada' : 'desativada'}.`,
-            className: 'border-primary text-foreground bg-background',
-          })
-          return { ...rule, active: newState }
-        }
-        return rule
-      }),
-    )
+  useEffect(() => {
+    getCampaigns()
+      .then(setCampaigns)
+      .catch(() =>
+        toast({ title: 'Erro ao carregar campanhas', variant: 'destructive' }),
+      )
+  }, [refreshTrigger])
+
+  const handleRefresh = () => {
+    setRefreshTrigger((prev) => prev + 1)
   }
 
-  const handleNewAutomation = () => {
-    toast({
-      title: 'Criar Nova Automação',
-      description: 'O fluxo de criação será aberto.',
-    })
+  const handleCampaignCreated = () => {
+    handleRefresh()
+    setActiveTab('active')
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-6xl mx-auto space-y-6 pb-20">
+      <div className="flex flex-col md:flex-row items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">
-            Fluxos de Automação
+          <h1 className="text-3xl font-bold text-white">
+            Automação de Mensagens
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Configure respostas automáticas e fluxos de trabalho
+          <p className="text-gray-400 mt-1">
+            Envie mensagens em massa de forma inteligente e personalizada.
           </p>
         </div>
         <Button
-          onClick={handleNewAutomation}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          onClick={() => setIsWizardOpen(true)}
+          className="bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-semibold shadow-lg shadow-yellow-500/10"
         >
           <Plus className="mr-2 h-4 w-4" />
-          Nova Automação
+          Nova Campanha
         </Button>
       </div>
 
-      <div className="grid gap-4">
-        {rules.map((rule) => (
-          <Card
-            key={rule.id}
-            className="bg-card border-border hover:border-primary/50 transition-colors duration-200"
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-6"
+      >
+        <TabsList className="bg-[#1a1a1a] border border-[#2a2a2a] p-1 h-auto">
+          <TabsTrigger
+            value="active"
+            className="data-[state=active]:bg-[#FFD700] data-[state=active]:text-black text-gray-400 px-6 py-2 transition-all"
           >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Zap
-                  className={`h-4 w-4 ${rule.active ? 'text-primary' : 'text-muted-foreground'}`}
-                />
-                {rule.name}
-              </CardTitle>
-              <Switch
-                checked={rule.active}
-                onCheckedChange={() => toggleRule(rule.id)}
-                className="data-[state=checked]:bg-primary"
-              />
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-base mb-4">
-                {rule.description}
-              </CardDescription>
-              <div className="flex items-center justify-between pt-2 border-t border-border">
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className="border-border text-muted-foreground"
-                  >
-                    Gatilho: {rule.trigger}
-                  </Badge>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-primary hover:text-primary/80 hover:bg-primary/10"
-                >
-                  Configurar <ArrowRight className="ml-1 h-3 w-3" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            <Zap className="mr-2 h-4 w-4" /> Campanhas Ativas
+          </TabsTrigger>
+          <TabsTrigger
+            value="history"
+            className="data-[state=active]:bg-[#FFD700] data-[state=active]:text-black text-gray-400 px-6 py-2 transition-all"
+          >
+            <HistoryIcon className="mr-2 h-4 w-4" /> Histórico
+          </TabsTrigger>
+          <TabsTrigger
+            value="models"
+            className="data-[state=active]:bg-[#FFD700] data-[state=active]:text-black text-gray-400 px-6 py-2 transition-all"
+          >
+            <LayoutTemplate className="mr-2 h-4 w-4" /> Modelos Salvos
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent
+          value="active"
+          className="animate-fade-in focus-visible:outline-none"
+        >
+          <AutomationDashboard
+            campaigns={campaigns}
+            onRefresh={handleRefresh}
+          />
+        </TabsContent>
+
+        <TabsContent
+          value="history"
+          className="animate-fade-in focus-visible:outline-none"
+        >
+          <div className="text-center py-20 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl text-gray-500">
+            <HistoryIcon className="h-10 w-10 mx-auto mb-4 opacity-50" />
+            <p>O histórico de campanhas aparecerá aqui.</p>
+          </div>
+        </TabsContent>
+
+        <TabsContent
+          value="models"
+          className="animate-fade-in focus-visible:outline-none"
+        >
+          <div className="text-center py-20 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl text-gray-500">
+            <LayoutTemplate className="h-10 w-10 mx-auto mb-4 opacity-50" />
+            <p>Seus modelos salvos aparecerão aqui.</p>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      <CampaignWizard
+        open={isWizardOpen}
+        onOpenChange={setIsWizardOpen}
+        onSuccess={handleCampaignCreated}
+      />
     </div>
   )
 }
