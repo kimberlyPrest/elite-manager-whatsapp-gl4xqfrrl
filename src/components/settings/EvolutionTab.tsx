@@ -24,12 +24,16 @@ import {
   EyeOff,
   Save,
   AlertTriangle,
+  Database,
+  Radio,
 } from 'lucide-react'
 import {
   EvolutionConfig,
   checkInstanceConnection,
   connectInstance,
   logoutInstance,
+  configureWebhook,
+  syncHistory,
 } from '@/services/whatsapp'
 import { QRCodeDisplay } from './QRCodeDisplay'
 
@@ -58,6 +62,8 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
   const [isConnecting, setIsConnecting] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isConfiguringWebhook, setIsConfiguringWebhook] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // QR Code State
   const [qrCode, setQrCode] = useState<string | null>(null)
@@ -231,6 +237,46 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
       })
     } finally {
       setIsDisconnecting(false)
+    }
+  }
+
+  const handleConfigureWebhook = async () => {
+    setIsConfiguringWebhook(true)
+    try {
+      await configureWebhook(config)
+      toast({
+        title: 'Webhook Configurado',
+        description: 'Recebimento de mensagens ativado com sucesso.',
+        className: 'bg-green-500 text-white',
+      })
+    } catch (e: any) {
+      toast({
+        title: 'Erro no Webhook',
+        description: e.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsConfiguringWebhook(false)
+    }
+  }
+
+  const handleSyncHistory = async () => {
+    setIsSyncing(true)
+    try {
+      const result = await syncHistory(config)
+      toast({
+        title: 'Histórico Sincronizado',
+        description: `${result.count} mensagens antigas foram importadas.`,
+        className: 'bg-green-500 text-white',
+      })
+    } catch (e: any) {
+      toast({
+        title: 'Erro na Sincronização',
+        description: e.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsSyncing(false)
     }
   }
 
@@ -421,20 +467,50 @@ export function EvolutionTab({ initialConfig, onSave }: EvolutionTabProps) {
           </div>
         )}
 
-        {/* Success Feedback Display */}
         {connectionState === 'open' && (
-          <div className="mt-6 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-6 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-2">
-            <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0 shadow-lg shadow-emerald-900/20">
-              <CheckCircle2 className="h-6 w-6" />
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            <div className="mt-6 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-6 flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0 shadow-lg shadow-emerald-900/20">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-emerald-500 text-lg">
+                  Sistema Online
+                </h4>
+                <p className="text-sm text-emerald-500/80">
+                  Sua instância <strong>{config.instance}</strong> está conectada
+                  e pronta para uso.
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="font-semibold text-emerald-500 text-lg">
-                Sistema Online
-              </h4>
-              <p className="text-sm text-emerald-500/80">
-                Sua instância <strong>{config.instance}</strong> está conectada
-                e pronta para uso.
-              </p>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={handleConfigureWebhook}
+                disabled={isConfiguringWebhook}
+                variant="outline"
+                className="flex-1 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-400"
+              >
+                {isConfiguringWebhook ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Radio className="mr-2 h-4 w-4" />
+                )}
+                Configurar Webhook
+              </Button>
+              <Button
+                onClick={handleSyncHistory}
+                disabled={isSyncing}
+                variant="outline"
+                className="flex-1 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:text-blue-400"
+              >
+                {isSyncing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Database className="mr-2 h-4 w-4" />
+                )}
+                Sincronizar Histórico
+              </Button>
             </div>
           </div>
         )}
