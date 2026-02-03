@@ -246,12 +246,15 @@ export const connectInstance = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
 
   try {
-    const response = await fetch(`${url}/instance/connect/${encodeURIComponent(config.instance)}`, {
-      method: 'GET',
-      headers: {
-        apikey: config.apikey,
+    const response = await fetch(
+      `${url}/instance/connect/${encodeURIComponent(config.instance)}`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: config.apikey,
+        },
       },
-    })
+    )
 
     if (!response.ok) {
       if (response.status === 401) throw new Error('API Key inválida (401)')
@@ -276,12 +279,15 @@ export const logoutInstance = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
 
   try {
-    const response = await fetch(`${url}/instance/logout/${encodeURIComponent(config.instance)}`, {
-      method: 'DELETE',
-      headers: {
-        apikey: config.apikey,
+    const response = await fetch(
+      `${url}/instance/logout/${encodeURIComponent(config.instance)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: config.apikey,
+        },
       },
-    })
+    )
 
     if (!response.ok) {
       if (response.status === 404) return true // Already logged out
