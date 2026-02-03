@@ -59,14 +59,16 @@ BEGIN
       user_id,
       identity_data,
       provider,
+      provider_id,
       last_sign_in_at,
       created_at,
       updated_at
     ) VALUES (
-      user_id,
+      gen_random_uuid(),
       user_id,
       format('{"sub":"%s","email":"%s"}', user_id::text, user_email)::jsonb,
       'email',
+      user_id::text,
       NOW(),
       NOW(),
       NOW()
