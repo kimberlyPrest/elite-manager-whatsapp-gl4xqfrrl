@@ -15,6 +15,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      analytics_sugestoes_ia: {
+        Row: {
+          cliente_id: string | null
+          conversa_id: string
+          created_at: string
+          feedback_comentario: string | null
+          feedback_positivo: boolean | null
+          foi_editada: boolean | null
+          foi_usada: boolean | null
+          id: string
+          modelo_used: string | null
+          sugestao_gerada: string
+          tempo_geracao_ms: number | null
+          tokens_usados: number | null
+        }
+        Insert: {
+          cliente_id?: string | null
+          conversa_id: string
+          created_at?: string
+          feedback_comentario?: string | null
+          feedback_positivo?: boolean | null
+          foi_editada?: boolean | null
+          foi_usada?: boolean | null
+          id?: string
+          modelo_used?: string | null
+          sugestao_gerada: string
+          tempo_geracao_ms?: number | null
+          tokens_usados?: number | null
+        }
+        Update: {
+          cliente_id?: string | null
+          conversa_id?: string
+          created_at?: string
+          feedback_comentario?: string | null
+          feedback_positivo?: boolean | null
+          foi_editada?: boolean | null
+          foi_usada?: boolean | null
+          id?: string
+          modelo_used?: string | null
+          sugestao_gerada?: string
+          tempo_geracao_ms?: number | null
+          tokens_usados?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'analytics_sugestoes_ia_cliente_id_fkey'
+            columns: ['cliente_id']
+            isOneToOne: false
+            referencedRelation: 'clientes'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'analytics_sugestoes_ia_conversa_id_fkey'
+            columns: ['conversa_id']
+            isOneToOne: false
+            referencedRelation: 'conversas_whatsapp'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       automacoes_massa: {
         Row: {
           created_at: string

@@ -56,3 +56,19 @@ export const trackSuggestionUsage = async (
 
   if (error) console.error('Error tracking usage:', error)
 }
+
+export const sendSuggestionFeedback = async (
+  analyticsId: string,
+  positive: boolean,
+) => {
+  if (!analyticsId) return
+
+  const { error } = await supabase
+    .from('analytics_sugestoes_ia')
+    .update({
+      feedback_positivo: positive,
+    })
+    .eq('id', analyticsId)
+
+  if (error) console.error('Error sending feedback:', error)
+}

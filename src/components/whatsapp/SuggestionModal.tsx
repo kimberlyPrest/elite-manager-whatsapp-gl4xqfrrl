@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Accordion,
   AccordionContent,
@@ -24,6 +23,8 @@ import {
   Edit2,
   Zap,
   AlertCircle,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
@@ -36,6 +37,7 @@ interface SuggestionModalProps {
   loading: boolean
   onUse: (text: string, wasEdited: boolean) => void
   onRegenerate: () => void
+  onFeedback: (positive: boolean) => void
 }
 
 export function SuggestionModal({
@@ -45,15 +47,20 @@ export function SuggestionModal({
   loading,
   onUse,
   onRegenerate,
+  onFeedback,
 }: SuggestionModalProps) {
   const [editedText, setEditedText] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [feedbackGiven, setFeedbackGiven] = useState<
+    'positive' | 'negative' | null
+  >(null)
 
   useEffect(() => {
     if (data?.suggestion) {
       setEditedText(data.suggestion)
       setIsEditing(false)
+      setFeedbackGiven(null)
     }
   }, [data])
 
@@ -71,6 +78,16 @@ export function SuggestionModal({
     const wasEdited = editedText !== data?.suggestion
     onUse(editedText, wasEdited)
     onClose()
+  }
+
+  const handleFeedback = (positive: boolean) => {
+    if (feedbackGiven) return
+    setFeedbackGiven(positive ? 'positive' : 'negative')
+    onFeedback(positive)
+    toast({
+      title: 'Obrigado!',
+      description: 'Seu feedback ajuda a melhorar as sugestões.',
+    })
   }
 
   if (!isOpen && !loading) return null
@@ -109,17 +126,17 @@ export function SuggestionModal({
                   <Textarea
                     value={editedText}
                     onChange={(e) => setEditedText(e.target.value)}
-                    className="min-h-[200px] bg-[#111] border-[#333] text-base leading-relaxed p-4 resize-none focus-visible:ring-[#FFD700]/50"
+                    className="min-h-[200px] bg-[#111] border-[#333] text-[15px] leading-[1.6] p-4 resize-none focus-visible:ring-[#FFD700]/50"
                     autoFocus
                   />
                 ) : (
-                  <div className="min-h-[200px] bg-[#111] border border-[#2a2a2a] rounded-md p-4 text-gray-100 whitespace-pre-wrap leading-relaxed relative">
+                  <div className="min-h-[200px] bg-[#111] border border-[#2a2a2a] rounded-md p-4 text-gray-100 text-[15px] leading-[1.6] whitespace-pre-wrap relative">
                     {editedText}
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => setIsEditing(true)}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#2a2a2a] hover:bg-[#333] text-xs h-7"
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#2a2a2a] hover:bg-[#333] text-xs h-7 border border-[#333]"
                     >
                       <Edit2 className="h-3 w-3 mr-1" /> Editar
                     </Button>
@@ -173,10 +190,41 @@ export function SuggestionModal({
           ) : null}
         </div>
 
-        <DialogFooter className="p-6 pt-2 bg-[#1a1a1a] border-t border-[#2a2a2a] gap-2 sm:gap-0">
+        <DialogFooter className="p-6 pt-4 bg-[#1a1a1a] border-t border-[#2a2a2a] gap-2 sm:gap-0 flex-wrap">
           {!loading && (
             <>
               <div className="flex items-center mr-auto gap-2">
+                <div className="flex items-center bg-[#111] rounded-md border border-[#333] p-0.5 mr-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-8 w-8 hover:bg-[#222]',
+                      feedbackGiven === 'positive'
+                        ? 'text-green-500'
+                        : 'text-gray-500',
+                    )}
+                    onClick={() => handleFeedback(true)}
+                    disabled={!!feedbackGiven}
+                  >
+                    <ThumbsUp className="h-4 w-4" />
+                  </Button>
+                  <div className="w-[1px] h-4 bg-[#333]" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-8 w-8 hover:bg-[#222]',
+                      feedbackGiven === 'negative'
+                        ? 'text-red-500'
+                        : 'text-gray-500',
+                    )}
+                    onClick={() => handleFeedback(false)}
+                    disabled={!!feedbackGiven}
+                  >
+                    <ThumbsDown className="h-4 w-4" />
+                  </Button>
+                </div>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -186,7 +234,7 @@ export function SuggestionModal({
                   <RefreshCw className="h-4 w-4 mr-2" /> Tentar Novamente
                 </Button>
               </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                 <Button
                   variant="outline"
                   onClick={handleCopy}

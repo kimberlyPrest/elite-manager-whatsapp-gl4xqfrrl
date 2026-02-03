@@ -111,8 +111,8 @@ export function ChatInput({
           disabled={disabled || suggestionLoading}
           variant="secondary"
           className={cn(
-            'mb-0.5 h-10 px-3 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 text-indigo-300 hover:text-white hover:border-indigo-400 transition-all',
-            suggestionLoading && 'opacity-80',
+            'mb-0.5 h-10 px-3 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 text-indigo-300 hover:text-white hover:border-indigo-400 hover:shadow-[0_0_15px_rgba(79,70,229,0.3)] transition-all',
+            suggestionLoading && 'opacity-80 cursor-wait',
           )}
           title="Sugerir resposta (Alt+S)"
         >

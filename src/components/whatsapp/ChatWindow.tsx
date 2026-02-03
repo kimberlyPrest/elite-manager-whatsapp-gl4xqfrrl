@@ -9,6 +9,7 @@ import {
 import {
   generateResponseSuggestion,
   trackSuggestionUsage,
+  sendSuggestionFeedback,
   SuggestionResponse,
 } from '@/services/ai'
 import { ChatInput } from './ChatInput'
@@ -160,6 +161,12 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
     }
   }
 
+  const handleFeedback = (positive: boolean) => {
+    if (suggestionData?.analyticsId) {
+      sendSuggestionFeedback(suggestionData.analyticsId, positive)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a]">
       {/* Header */}
@@ -265,6 +272,7 @@ export function ChatWindow({ conversation, onToggleProfile }: ChatWindowProps) {
         data={suggestionData}
         onUse={handleUseSuggestion}
         onRegenerate={handleSuggest}
+        onFeedback={handleFeedback}
       />
     </div>
   )
