@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Card,
   CardContent,
@@ -34,14 +34,18 @@ import {
   ExternalLink,
   Loader2,
   Sparkles,
+  Wifi,
+  WifiOff,
+  Power,
+  CheckCircle2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-
-interface EvolutionConfig {
-  url: string
-  apikey: string
-  instance: string
-}
+import {
+  EvolutionConfig,
+  checkInstanceConnection,
+  connectInstance,
+  logoutInstance,
+} from '@/services/whatsapp'
 
 interface GeminiConfig {
   apikey: string
@@ -55,6 +59,15 @@ interface GeneralConfig {
   sound: boolean
   refreshInterval: number
 }
+
+type ConnectionState =
+  | 'open'
+  | 'close'
+  | 'connecting'
+  | 'unknown'
+  | 'error'
+  | 'unauthorized'
+  | 'not_found'
 
 export default function Settings() {
   const [loading, setLoading] = useState(true)
@@ -81,23 +94,24 @@ export default function Settings() {
   // UI States
   const [showEvolutionKey, setShowEvolutionKey] = useState(false)
   const [showGeminiKey, setShowGeminiKey] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<
-    'connected' | 'disconnected' | 'unknown'
-  >('unknown')
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>('unknown')
   const [geminiStatus, setGeminiStatus] = useState<
     'configured' | 'not_configured'
   >('not_configured')
 
   // Action States
   const [saving, setSaving] = useState(false)
-  const [testingEvolution, setTestingEvolution] = useState(false)
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false)
   const [generatingQR, setGeneratingQR] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
   const [testingGemini, setTestingGemini] = useState(false)
 
   // QR Code Logic
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [qrTimer, setQrTimer] = useState(0)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
   // Fetch initial data
   useEffect(() => {
@@ -113,11 +127,12 @@ export default function Settings() {
             configMap[item.chave] = item.valor || ''
           })
 
-          setEvolutionConfig({
+          const loadedEvoConfig = {
             url: configMap['evolution_url'] || '',
             apikey: configMap['evolution_apikey'] || '',
             instance: configMap['evolution_instance'] || '',
-          })
+          }
+          setEvolutionConfig(loadedEvoConfig)
 
           setGeminiConfig({
             apikey: configMap['gemini_apikey'] || '',
@@ -135,8 +150,16 @@ export default function Settings() {
             ),
           })
 
-          // Set initial statuses
           if (configMap['gemini_apikey']) setGeminiStatus('configured')
+
+          // Check connection if config exists
+          if (
+            loadedEvoConfig.url &&
+            loadedEvoConfig.apikey &&
+            loadedEvoConfig.instance
+          ) {
+            verifyConnection(loadedEvoConfig)
+          }
         }
       } catch (error) {
         console.error('Error loading settings:', error)
@@ -152,17 +175,95 @@ export default function Settings() {
     loadSettings()
   }, [])
 
+  // Verify Connection Function
+  const verifyConnection = useCallback(
+    async (config: EvolutionConfig, silent = true) => {
+      if (!silent) setIsCheckingConnection(true)
+      try {
+        const result = await checkInstanceConnection(config)
+        setConnectionState(result.state as ConnectionState)
+
+        if (!silent) {
+          if (result.state === 'open') {
+            toast({
+              title: 'Conexão Estabelecida',
+              description: 'A instância está online e pronta.',
+              className: 'bg-green-500 text-white border-green-600',
+            })
+          } else if (result.state === 'close') {
+            toast({
+              title: 'Instância Desconectada',
+              description:
+                'A instância existe mas não está conectada ao WhatsApp.',
+              variant: 'default',
+            })
+          } else if (result.state === 'unauthorized') {
+            toast({
+              title: 'Erro de Autenticação',
+              description: 'Verifique sua API Key.',
+              variant: 'destructive',
+            })
+          } else if (result.state === 'not_found') {
+            toast({
+              title: 'Instância Não Encontrada',
+              description: 'Verifique o nome da instância.',
+              variant: 'destructive',
+            })
+          } else {
+            toast({
+              title: 'Estado da Conexão',
+              description: `Status atual: ${result.state}`,
+            })
+          }
+        }
+      } catch (error) {
+        setConnectionState('error')
+        if (!silent) {
+          toast({
+            title: 'Erro de Conexão',
+            description: 'Não foi possível contactar o servidor.',
+            variant: 'destructive',
+          })
+        }
+      } finally {
+        if (!silent) setIsCheckingConnection(false)
+      }
+    },
+    [],
+  )
+
+  // Polling for connection status when QR is displayed
+  useEffect(() => {
+    if (qrCode || connectionState === 'connecting') {
+      pollingRef.current = setInterval(() => {
+        verifyConnection(evolutionConfig, true).then(() => {
+          // If connected, stop polling and clear QR
+          if (connectionState === 'open') {
+            setQrCode(null)
+            if (pollingRef.current) clearInterval(pollingRef.current)
+            toast({
+              title: 'WhatsApp Conectado!',
+              description: 'Dispositivo sincronizado com sucesso.',
+              className: 'bg-green-500 text-white border-green-600',
+            })
+          }
+        })
+      }, 3000)
+    }
+
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
+    }
+  }, [qrCode, connectionState, evolutionConfig, verifyConnection])
+
   // QR Timer Countdown
   useEffect(() => {
     if (qrTimer > 0) {
       timerRef.current = setTimeout(() => setQrTimer((t) => t - 1), 1000)
     } else if (qrTimer === 0 && qrCode) {
-      setQrCode(null)
-      toast({
-        title: 'QR Code Expirado',
-        description: 'O código QR expirou. Por favor, gere um novo.',
-        variant: 'default',
-      })
+      // Don't auto-clear QR in real impl unless we want to force refresh,
+      // but typically we can leave it or show "Expired".
+      // Evolution QR usually doesn't expire visually unless base64 changes.
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
@@ -199,7 +300,7 @@ export default function Settings() {
     }
   }
 
-  const handleSaveEvolution = () => {
+  const handleSaveEvolution = async () => {
     // Validation
     if (
       !evolutionConfig.url ||
@@ -213,7 +314,10 @@ export default function Settings() {
       })
       return
     }
-    if (!/^https?:\/\//.test(evolutionConfig.url)) {
+
+    // Clean URL
+    const cleanUrl = evolutionConfig.url.trim().replace(/\/$/, '')
+    if (!/^https?:\/\//.test(cleanUrl)) {
       toast({
         title: 'URL Inválida',
         description: 'A URL deve começar com http:// ou https://',
@@ -221,20 +325,18 @@ export default function Settings() {
       })
       return
     }
-    if (evolutionConfig.apikey.length < 20) {
-      toast({
-        title: 'API Key Inválida',
-        description: 'A chave deve ter pelo menos 20 caracteres.',
-        variant: 'destructive',
-      })
-      return
-    }
 
-    saveToSupabase([
-      { chave: 'evolution_url', valor: evolutionConfig.url },
+    setEvolutionConfig((prev) => ({ ...prev, url: cleanUrl }))
+
+    const success = await saveToSupabase([
+      { chave: 'evolution_url', valor: cleanUrl },
       { chave: 'evolution_apikey', valor: evolutionConfig.apikey },
       { chave: 'evolution_instance', valor: evolutionConfig.instance },
     ])
+
+    if (success) {
+      verifyConnection({ ...evolutionConfig, url: cleanUrl }, false)
+    }
   }
 
   const handleSaveGemini = () => {
@@ -271,60 +373,80 @@ export default function Settings() {
     ])
   }
 
-  // API Actions
-  const handleTestEvolution = async () => {
-    setTestingEvolution(true)
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-      const success = Math.random() > 0.3
+  // Evolution Actions
+  const handleConnect = async () => {
+    if (connectionState === 'open') {
+      toast({
+        title: 'Já Conectado',
+        description: 'A instância já está conectada.',
+      })
+      return
+    }
 
-      if (success) {
-        setConnectionStatus('connected')
+    setGeneratingQR(true)
+    setQrCode(null)
+    try {
+      const data = await connectInstance(evolutionConfig)
+
+      // Evolution API logic: if already connected, it returns instance data
+      // If needs QR, returns base64 or qrcode object
+      if (data?.base64 || data?.qrcode?.base64) {
+        setQrCode(data.base64 || data.qrcode.base64)
+        setQrTimer(45) // Approx refresh time
         toast({
-          title: 'Conexão Estabelecida',
-          description: 'A instância está conectada e operante.',
-          className: 'border-green-500 text-foreground bg-background',
+          title: 'QR Code Gerado',
+          description: 'Escaneie o código com seu WhatsApp.',
+        })
+      } else if (data?.instance?.state === 'open') {
+        setConnectionState('open')
+        toast({
+          title: 'Conectado',
+          description: 'Instância já estava conectada.',
         })
       } else {
-        setConnectionStatus('disconnected')
+        // Sometimes it just returns "status": "connecting"
+        setConnectionState('connecting')
         toast({
-          title: 'Falha na Conexão',
-          description:
-            'Não foi possível conectar à instância. Verifique os dados.',
-          variant: 'destructive',
+          title: 'Solicitado',
+          description: 'Aguardando QR Code ou conexão...',
         })
+        // Wait a bit and try to get QR again if still needed, usually user should click again or we poll state
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.error(e)
       toast({
-        title: 'Erro de Rede',
-        description: 'Falha ao contactar o servidor.',
-        variant: 'destructive',
-      })
-    } finally {
-      setTestingEvolution(false)
-    }
-  }
-
-  const handleGenerateQR = async () => {
-    setGeneratingQR(true)
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-      setQrCode('https://img.usecurling.com/i?q=qr-code&color=white&shape=fill')
-      setQrTimer(45)
-
-      toast({
-        title: 'QR Code Gerado',
-        description: 'Escaneie o código para conectar.',
-        className: 'border-primary text-foreground bg-background',
-      })
-    } catch (e) {
-      toast({
-        title: 'Erro',
-        description: 'Falha ao gerar QR Code.',
+        title: 'Erro de Conexão',
+        description: e.message || 'Falha ao solicitar conexão.',
         variant: 'destructive',
       })
     } finally {
       setGeneratingQR(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    if (
+      !confirm('Tem certeza que deseja desconectar? Isso parará as automações.')
+    )
+      return
+
+    setDisconnecting(true)
+    try {
+      await logoutInstance(evolutionConfig)
+      setConnectionState('close')
+      setQrCode(null)
+      toast({
+        title: 'Desconectado',
+        description: 'Instância desconectada com sucesso.',
+      })
+    } catch (e: any) {
+      toast({
+        title: 'Erro ao Desconectar',
+        description: e.message || 'Tente novamente.',
+        variant: 'destructive',
+      })
+    } finally {
+      setDisconnecting(false)
     }
   }
 
@@ -346,7 +468,7 @@ export default function Settings() {
         toast({
           title: 'Integração Gemini Ativa',
           description: 'A API do Google Gemini respondeu corretamente.',
-          className: 'border-green-500 text-foreground bg-background',
+          className: 'bg-green-500 text-white border-green-600',
         })
       } else {
         throw new Error('API Error')
@@ -359,6 +481,42 @@ export default function Settings() {
       })
     } finally {
       setTestingGemini(false)
+    }
+  }
+
+  const getConnectionStatusColor = (status: ConnectionState) => {
+    switch (status) {
+      case 'open':
+        return 'bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25 border-emerald-500/20'
+      case 'close':
+        return 'bg-yellow-500/15 text-yellow-500 hover:bg-yellow-500/25 border-yellow-500/20'
+      case 'connecting':
+        return 'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25 border-blue-500/20'
+      case 'error':
+      case 'unauthorized':
+      case 'not_found':
+        return 'bg-red-500/15 text-red-500 hover:bg-red-500/25 border-red-500/20'
+      default:
+        return 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+    }
+  }
+
+  const getConnectionStatusText = (status: ConnectionState) => {
+    switch (status) {
+      case 'open':
+        return 'Conectado'
+      case 'close':
+        return 'Desconectado'
+      case 'connecting':
+        return 'Conectando...'
+      case 'unauthorized':
+        return 'Não Autorizado'
+      case 'not_found':
+        return 'Instância Não Encontrada'
+      case 'error':
+        return 'Erro de Rede'
+      default:
+        return 'Desconhecido'
     }
   }
 
@@ -409,17 +567,20 @@ export default function Settings() {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <CardTitle className="text-xl flex items-center gap-2">
-                    Integração WhatsApp (Evolution API)
-                    {connectionStatus === 'connected' && (
-                      <Badge className="bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25 border-0">
-                        Conectado
-                      </Badge>
-                    )}
-                    {connectionStatus === 'disconnected' && (
-                      <Badge className="bg-red-500/15 text-red-500 hover:bg-red-500/25 border-0">
-                        Desconectado
-                      </Badge>
-                    )}
+                    Integração WhatsApp
+                    <Badge
+                      variant="outline"
+                      className={getConnectionStatusColor(connectionState)}
+                    >
+                      {isCheckingConnection ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : connectionState === 'open' ? (
+                        <Wifi className="h-3 w-3 mr-1" />
+                      ) : (
+                        <WifiOff className="h-3 w-3 mr-1" />
+                      )}
+                      {getConnectionStatusText(connectionState)}
+                    </Badge>
                   </CardTitle>
                   <CardDescription>
                     Configure a conexão com sua instância Evolution para
@@ -446,6 +607,10 @@ export default function Settings() {
                     }
                     className="h-12 bg-input border-input focus:border-primary"
                   />
+                  <p className="text-[10px] text-muted-foreground">
+                    URL base da sua instalação Evolution API (ex:
+                    https://api.meudominio.com)
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="evolution-instance">
@@ -497,66 +662,104 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-2 border-t border-border mt-6">
                 <Button
-                  variant="secondary"
-                  onClick={handleTestEvolution}
+                  variant="outline"
+                  onClick={() => verifyConnection(evolutionConfig, false)}
                   disabled={
-                    testingEvolution ||
+                    isCheckingConnection ||
                     !evolutionConfig.url ||
                     !evolutionConfig.instance
                   }
-                  className="h-12 border-border hover:bg-secondary/80"
+                  className="h-11 border-border hover:bg-secondary flex-1"
                 >
-                  {testingEvolution ? (
+                  {isCheckingConnection ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <RefreshCw className="mr-2 h-4 w-4" />
                   )}
                   Testar Conexão
                 </Button>
-                <Button
-                  variant="secondary"
-                  onClick={handleGenerateQR}
-                  disabled={generatingQR || connectionStatus !== 'connected'}
-                  className="h-12 border-border hover:bg-secondary/80"
-                >
-                  {generatingQR ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <QrCode className="mr-2 h-4 w-4" />
-                  )}
-                  Gerar QR Code
-                </Button>
+
+                {connectionState !== 'open' ? (
+                  <Button
+                    variant="secondary"
+                    onClick={handleConnect}
+                    disabled={
+                      generatingQR ||
+                      connectionState === 'open' ||
+                      !evolutionConfig.url
+                    }
+                    className="h-11 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 flex-1"
+                  >
+                    {generatingQR ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <QrCode className="mr-2 h-4 w-4" />
+                    )}
+                    Gerar QR Code
+                  </Button>
+                ) : (
+                  <Button
+                    variant="destructive"
+                    onClick={handleDisconnect}
+                    disabled={disconnecting}
+                    className="h-11 flex-1"
+                  >
+                    {disconnecting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Power className="mr-2 h-4 w-4" />
+                    )}
+                    Desconectar Instância
+                  </Button>
+                )}
               </div>
 
-              {qrCode && (
-                <div className="mt-6 rounded-xl bg-[#2a2a2a] p-8 text-center animate-fade-in-down border border-border">
-                  <h3 className="text-lg font-medium text-foreground mb-4">
+              {/* QR Code Display */}
+              {qrCode && connectionState !== 'open' && (
+                <div className="mt-6 rounded-xl bg-[#2a2a2a] p-8 text-center animate-fade-in-down border border-border relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent animate-pulse" />
+                  <h3 className="text-lg font-medium text-foreground mb-4 flex items-center justify-center gap-2">
+                    <QrCode className="h-5 w-5 text-primary" />
                     Escaneie o QR Code no WhatsApp
                   </h3>
-                  <div className="bg-white p-2 rounded-lg inline-block mx-auto mb-4">
+                  <div className="bg-white p-2 rounded-lg inline-block mx-auto mb-4 shadow-xl shadow-black/50">
                     <img
                       src={qrCode}
                       alt="QR Code WhatsApp"
                       className="w-64 h-64 object-contain"
                     />
                   </div>
-                  <div className="max-w-xs mx-auto text-sm text-muted-foreground space-y-2">
+                  <div className="max-w-xs mx-auto text-sm text-muted-foreground space-y-2 text-left bg-black/20 p-4 rounded-lg">
                     <p>1. Abra o WhatsApp no seu celular</p>
-                    <p>
-                      2. Toque em <strong>Menu</strong> ou{' '}
-                      <strong>Configurações</strong> e selecione{' '}
-                      <strong>Aparelhos conectados</strong>
-                    </p>
+                    <p>2. Menu &gt; Aparelhos conectados</p>
                     <p>
                       3. Toque em <strong>Conectar um aparelho</strong>
                     </p>
-                    <p>4. Aponte seu celular para esta tela</p>
+                    <p>4. Aponte a câmera para esta tela</p>
                   </div>
-                  <div className="mt-4 flex items-center justify-center gap-2 text-primary font-mono text-lg">
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    00:{qrTimer.toString().padStart(2, '0')}
+                  <div className="mt-4 flex items-center justify-center gap-2 text-primary font-mono text-sm">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Aguardando leitura...
+                  </div>
+                </div>
+              )}
+
+              {connectionState === 'open' && (
+                <div className="mt-6 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-6 flex items-center gap-4 animate-fade-in">
+                  <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+                    <CheckCircle2 className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-emerald-500 text-lg">
+                      Tudo Certo!
+                    </h4>
+                    <p className="text-sm text-emerald-500/80">
+                      Sua instância está conectada e operando normalmente. As
+                      mensagens serão sincronizadas automaticamente.
+                    </p>
                   </div>
                 </div>
               )}
@@ -848,16 +1051,6 @@ export default function Settings() {
                     segundos (5-60)
                   </span>
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4 opacity-70">
-                <div className="space-y-0.5">
-                  <Label className="text-base">Modo escuro</Label>
-                  <p className="text-sm text-muted-foreground">
-                    O tema escuro é o padrão do sistema Elite Manager.
-                  </p>
-                </div>
-                <Switch checked disabled />
               </div>
             </CardContent>
             <CardFooter className="bg-secondary/20 p-6 border-t border-border">

@@ -30,7 +30,13 @@ export interface WhatsAppMessage {
   enviado_via?: string
 }
 
-export const getWhatsappConfig = async () => {
+export interface EvolutionConfig {
+  url: string
+  apikey: string
+  instance: string
+}
+
+export const getWhatsappConfig = async (): Promise<EvolutionConfig> => {
   const { data, error } = await supabase
     .from('configuracoes')
     .select('chave, valor')
@@ -43,10 +49,13 @@ export const getWhatsappConfig = async () => {
     config[item.chave] = item.valor || ''
   })
 
+  // Normalize URL by removing trailing slash
+  const url = config['evolution_url']?.replace(/\/$/, '') || ''
+
   return {
-    url: config['evolution_url'],
-    apikey: config['evolution_apikey'],
-    instance: config['evolution_instance'],
+    url,
+    apikey: config['evolution_apikey'] || '',
+    instance: config['evolution_instance'] || '',
   }
 }
 
@@ -59,10 +68,6 @@ export const getConversations = async (
       cliente:clientes(id, nome_completo, primeiro_nome)
     `)
 
-  // Base sorting (will be refined in UI for advanced sorting)
-  // Default: Priority then Recent Interaction
-  // Note: Supabase sorting with custom priority order (Crítico > Alto...) is complex in simple query
-  // We'll sort mainly by interaction here and refine in client or use updated score_prioridade if available
   query = query.order('ultima_interacao', { ascending: false })
 
   if (search) {
@@ -165,7 +170,6 @@ export const sendWhatsAppMessage = async (
     })
     .eq('id', conversationId)
 
-  // Trigger priority recalculation asynchronously
   recalculatePriority(conversationId).catch(console.error)
 
   return data
@@ -202,4 +206,86 @@ export const setManualPriority = async (
     .eq('id', conversationId)
 
   if (error) throw error
+}
+
+/**
+ * Checks the connection state of the Evolution API instance.
+ */
+export const checkInstanceConnection = async (config: EvolutionConfig) => {
+  const url = config.url.replace(/\/$/, '')
+  try {
+    const response = await fetch(
+      `${url}/instance/connectionState/${config.instance}`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: config.apikey,
+        },
+      },
+    )
+
+    if (!response.ok) {
+      if (response.status === 404) return { state: 'not_found' }
+      if (response.status === 401) return { state: 'unauthorized' }
+      throw new Error(`API Error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    // Evolution API structure usually: { instance: { state: 'open' | 'close' | 'connecting' } }
+    return { state: data?.instance?.state || 'unknown' }
+  } catch (error) {
+    console.error('Connection check failed:', error)
+    return { state: 'error', error }
+  }
+}
+
+/**
+ * Initiates connection to get QR Code.
+ */
+export const connectInstance = async (config: EvolutionConfig) => {
+  const url = config.url.replace(/\/$/, '')
+  try {
+    const response = await fetch(`${url}/instance/connect/${config.instance}`, {
+      method: 'GET',
+      headers: {
+        apikey: config.apikey,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to connect: ${response.status}`)
+    }
+
+    const data = await response.json()
+    // Evolution API returns base64 or message
+    return data
+  } catch (error) {
+    throw error
+  }
+}
+
+/**
+ * Logs out the instance.
+ */
+export const logoutInstance = async (config: EvolutionConfig) => {
+  const url = config.url.replace(/\/$/, '')
+  try {
+    const response = await fetch(`${url}/instance/logout/${config.instance}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: config.apikey,
+      },
+    })
+
+    if (!response.ok) {
+      // 404 means already logged out or instance doesn't exist, which is fine for logout
+      if (response.status !== 404) {
+        throw new Error(`Failed to logout: ${response.status}`)
+      }
+    }
+
+    return true
+  } catch (error) {
+    throw error
+  }
 }
