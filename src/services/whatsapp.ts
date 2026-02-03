@@ -358,13 +358,54 @@ export const syncHistory = async (config: EvolutionConfig) => {
   const url = config.url.replace(/\/$/, '')
 
   try {
-    let allMessages: any[] = []
-    let currentPage = 1
-    let totalPages = 1
-    const limit = 100 // Larger limit for efficiency
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+    const webhookUrl = `${supabaseUrl}/functions/v1/webhook-whatsapp`
 
-    // Helper to fetch a single page
-    const fetchPage = async (page: number) => {
+    // --- STEP 1: Sync Conversations (Chats) ---
+    console.log('Syncing conversations list...')
+    const convResponse = await fetch(
+      `${url}/chat/findConversations/${encodeURIComponent(config.instance)}`,
+      {
+        method: 'GET',
+        headers: { apikey: config.apikey },
+      }
+    )
+
+    if (convResponse.ok) {
+      const convs = await convResponse.json()
+      const convArray = Array.isArray(convs) ? convs : (convs.records || [])
+      console.log(`Found ${convArray.length} conversations. Syncing basic info...`)
+
+      const convBatches = []
+      for (let i = 0; i < convArray.length; i += 50) {
+        convBatches.push(convArray.slice(i, i + 50))
+      }
+
+      for (const batch of convBatches) {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'messages.upsert',
+            data: {
+              messages: batch.map((c: any) => ({
+                key: { remoteJid: c.id, fromMe: false, id: `sync-chat-${Date.now()}-${Math.random()}` },
+                pushName: c.name || c.pushName,
+                messageTimestamp: Math.floor(Date.now() / 1000),
+                message: { conversation: c.lastMessage || '' }
+              }))
+            }
+          }),
+        }).catch(err => console.error('Failed to sync conversation batch', err))
+      }
+    }
+
+    // --- STEP 2: Sync Messages (History) ---
+    let totalPages = 1
+    const limit = 100
+    let syncedCount = 0
+
+    const getPage = async (page: number) => {
       const resp = await fetch(
         `${url}/chat/findMessages/${encodeURIComponent(config.instance)}`,
         {
@@ -379,24 +420,21 @@ export const syncHistory = async (config: EvolutionConfig) => {
           }),
         },
       )
-      if (!resp.ok) throw new Error(`Erro na página ${page}: ${resp.status}`)
-      return await resp.json()
+      if (!resp.ok) return null
+      const data = await resp.json()
+      const records = data.messages?.records || data.messages || data.data || []
+      const pages = data.messages?.pages || 1
+      return { records, pages }
     }
 
-    // Fetch first page to get total
-    const firstPage = await fetchPage(1)
-    console.log('Sync First Page Result:', firstPage)
+    const maxPagesToSync = 100
+    for (let p = 1; p <= maxPagesToSync; p++) {
+      console.log(`Fetching messages page ${p}...`)
+      const pageData = await getPage(p)
 
-    const extractRecords = (data: any) => {
-      if (Array.isArray(data)) return data
-      if (data.messages?.records) return data.messages.records
-      if (Array.isArray(data.messages)) return data.messages
-      if (Array.isArray(data.data)) return data.data
-      return []
-    }
+      if (!pageData || pageData.records.length === 0) break
 
-    allMessages = extractRecords(firstPage)
-    totalPages = firstPage.messages?.pages || 1
+      totalPages = pageData.pages
 
     // Fetch up to 500 messages (5 pages) for now to avoid browser lockup
     // 12k messages would require a different architecture (background job)
@@ -451,8 +489,26 @@ export const syncHistory = async (config: EvolutionConfig) => {
           }
         }),
       )
+
+      const resp = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'messages.upsert',
+          data: { messages: orderedBatch }
+        }),
+      })
+
+      if (resp.ok) {
+        const result = await resp.json()
+        syncedCount += (result.processed || orderedBatch.length)
+      }
+
+      if (p >= totalPages) break
+      await new Promise(resolve => setTimeout(resolve, 50))
     }
 
+    console.log(`Sync complete. Total items processed: ${syncedCount}`)
     return { count: syncedCount }
   } catch (error: any) {
     console.error('History sync failed:', error)
